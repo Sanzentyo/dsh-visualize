@@ -18,7 +18,7 @@ import { assertHtml, assertMode, assertTitle, destination, MODES } from './lib/v
 export const name = 'dsh-visualize'
 
 /** Services this plugin needs. */
-export const inject = ['tools']
+export const inject = ['tools', 'workingDirectory']
 
 /**
  * Register the `visualize` tool.
@@ -73,11 +73,15 @@ export function apply(ctx) {
       },
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
     },
-    async execute(args) {
+    async execute(args, exec) {
       const title = assertTitle(args.title)
       const html = assertHtml(args.html)
       const mode = assertMode(args.mode)
-      const target = destination(process.cwd(), title, args.path)
+      // The Session's working directory, not the server process's: a
+      // visualization belongs beside the work it describes, and `api/file`
+      // serves paths relative to the same root.
+      const cwd = await ctx.workingDirectory.ensure(exec.agent, exec.signal)
+      const target = destination(cwd, title, args.path)
 
       await mkdir(dirname(target), { recursive: true })
       await writeFile(target, html, 'utf8')
