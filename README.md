@@ -72,24 +72,42 @@ requests. This is the same posture DSH's own HTML document preview uses.
 
 ## Theme
 
-The host copies its live CSS custom properties into the frame, so a visualization follows the
-light/dark switch without knowing it exists. Use `var(...)`, never literal colours.
+The Harness defines its palette as `--dsw-alias-*` custom properties on `:root` and flips
+`data-ds-dark-theme` on `<body>` to switch between light and dark. The renderer copies those values
+into the frame and exposes short aliases, so a fragment never has to know which alias means "body
+text". Use `var(...)`, never a literal colour.
 
-| Purpose | Tokens |
-|---|---|
-| surface / text | `--background` `--foreground` |
-| panels | `--card` `--card-foreground` `--popover` `--muted` `--muted-foreground` |
-| emphasis | `--primary` `--primary-foreground` `--accent` `--destructive` |
-| lines | `--border` `--input` `--ring` |
-| series | `--viz-series-1` … `--viz-series-6` |
-| scale | `--font-size-base` |
+| Purpose | Alias | Host token |
+|---|---|---|
+| body text | `--vz-text` | `--dsw-alias-label-primary` |
+| secondary text | `--vz-dim` | `--dsw-alias-label-primary-dimmed` |
+| panel | `--vz-surface` | `--dsw-alias-bg-layer-1` |
+| border | `--vz-border` | `--dsw-alias-border-l1` |
+| emphasis / link | `--vz-accent` | `--dsw-alias-brand-primary` |
+| body size | `--vz-font-size` | `--dsh-content-font-size` |
+| body font | `--vz-font` | `--dsh-font-family-text` |
+| code | `--vz-font-code` / `--vz-code-bg` | `--dsh-font-family-code` / `--dsw-alias-markdown-code-block` |
 
-A `MutationObserver` on `document.documentElement` re-renders the frame when the theme class changes.
+The Harness has no chart palette, so the plugin owns `--viz-series-1` … `--viz-series-6` and keeps
+two sets — one tuned for a white surface, one for a near-black one — switching them with the theme.
+The hue order is fixed, so a series keeps its identity across a switch.
+
+State colours come straight from the Harness: `--dsw-alias-state-error-primary`,
+`--dsw-alias-state-success-primary`, `--dsw-alias-state-warn-primary`, and
+`--dsw-alias-interactive-bg-hover-accent` for hover surfaces.
+
+A `MutationObserver` on `<html>` and `<body>` plus a `prefers-color-scheme` listener re-render the
+frame when the theme changes.
+
+## Height
+
+The frame reports its own content height over `postMessage` and the card follows it, so a
+visualization never leaves a fixed-height gap. Fragments should not set a height.
 
 ## Mobile
 
 The renderer registers into `conversation.chat.node`'s `tool.call.toolview` seat, which the core chat
-flow renders on every layout — the phone shell included. `regular` caps at 760px and `wide` at 100%,
+flow renders on every layout — the phone shell included. `regular` caps at 780px and `wide` at 100%,
 so both fit a phone without a separate code path.
 
 ## Skill

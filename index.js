@@ -35,8 +35,10 @@ export function apply(ctx) {
       + 'Write an HTML fragment only: no <!doctype>, <html>, <head> or <body>. '
       + 'Give the root element a unique id and select it with document.getElementById. '
       + 'Inline CSS and JavaScript; never call fetch, XMLHttpRequest or WebSocket. '
-      + 'Theme colours come from CSS custom properties the host injects (--background, --foreground, --card, '
-      + '--muted, --muted-foreground, --border, --primary, --viz-series-1 through --viz-series-6), so use var(...) instead of literal colours. '
+      + 'Colours must come from the CSS custom properties the host injects: --vz-text (body), --vz-dim (secondary), '
+      + '--vz-surface (panel), --vz-border, --vz-accent, and --viz-series-1 through --viz-series-6 for series. '
+      + 'Those switch with the light/dark theme, so never write a literal colour. '
+      + 'The frame sizes itself to the content; do not set a fixed height. '
       + 'Keep it under 1 MB. Answer with one short sentence about what the visual shows; do not repeat its data.',
     parameters: {
       title: {

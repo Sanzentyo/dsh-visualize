@@ -50,27 +50,46 @@ visualize(
 5. **`fetch` / `XMLHttpRequest` / `WebSocket` を使わない**。iframe は
    `sandbox="allow-scripts"`（`allow-same-origin` なし）なので、そもそも
    オリジンを持たず外部と通信できない。データは断片に埋め込む。
-6. **外部リソースは最小限**。CDN を使うならバージョン固定の URL にする。
-   オフラインや社内環境では読めない前提で、無くても成立するように書く。
+6. **高さは自動**。iframe は内容の高さに追従するので `height` を指定しない。
+   固定値が要るのは、スクロールさせたい表など限られた場合だけ。
 
-## テーマ
+## テーマ — DSH のトークンを使う
 
-ホストが CSS カスタムプロパティを iframe に注入する。リテラル色を使わず `var(...)` で参照する。
+DSH は `--dsw-alias-*` という独自のトークンを持ち、ダーク/ライトを
+`<body data-ds-dark-theme>` で切り替える。プラグインがそれらを iframe に
+コピーし、**短い別名**を用意している。断片は別名だけを使えばよい。
+
+| 用途 | 別名 | 元のトークン |
+|---|---|---|
+| 本文 | `--vz-text` | `--dsw-alias-label-primary` |
+| 補助文字 | `--vz-dim` | `--dsw-alias-label-primary-dimmed` |
+| 面 | `--vz-surface` | `--dsw-alias-bg-layer-1` |
+| 枠線 | `--vz-border` | `--dsw-alias-border-l1` |
+| 強調・リンク | `--vz-accent` | `--dsw-alias-brand-primary` |
+| 本文サイズ | `--vz-font-size` | `--dsh-content-font-size` |
+| 本文フォント | `--vz-font` | `--dsh-font-family-text` |
+| コード | `--vz-font-code` / `--vz-code-bg` | `--dsh-font-family-code` / `--dsw-alias-markdown-code-block` |
+
+系列色は DSH に無いので**プラグインが持っている**。ライトとダークで別の値を
+持ち、テーマを切り替えると入れ替わる。色順は固定なので系列の identity は保たれる。
+
+| トークン | 用途 |
+|---|---|
+| `--viz-series-1` 〜 `--viz-series-6` | 系列色（青・橙・緑・紫・赤・水色） |
+
+エラー・成功・警告は DSH の状態色をそのまま使う:
 
 | 用途 | トークン |
 |---|---|
-| 背景 / 文字 | `--background` `--foreground` |
-| 面 | `--card` `--card-foreground` `--popover` `--muted` `--muted-foreground` |
-| 強調 | `--primary` `--primary-foreground` `--accent` `--destructive` |
-| 線 | `--border` `--input` `--ring` |
-| 系列色 | `--viz-series-1` 〜 `--viz-series-6` |
-| 基準サイズ | `--font-size-base` |
+| エラー | `--dsw-alias-state-error-primary` |
+| 成功 | `--dsw-alias-state-success-primary` |
+| 警告 | `--dsw-alias-state-warn-primary` |
+| ホバー面 | `--dsw-alias-interactive-bg-hover-accent` |
+
+**リテラル色を書かない。** `#333` や `black` はダークモードで破綻する。
+`var(--vz-text)` などを必ず経由する。
 
 系列色は「重要な識別」にだけ使う。全部の棒に別色を割り当てない。
-値・軸ラベルは `--foreground` か `--muted-foreground` にする。
-
-用意されている基本クラス: `.card` `.muted`。`body` にはフォント・行間・余白が
-既に当たっているので、余白を二重に取らない。
 
 ## サイズ
 
@@ -83,7 +102,7 @@ visualize(
 ## モバイル
 
 iframe の幅は会話幅に追従する。固定 px 幅を書かず、`%` か `flex` で組む。
-`regular` は最大 760px、`wide` は 100% なので、`regular` のままでも
+`regular` は最大 780px、`wide` は 100% なので、`regular` のままでも
 スマホでは画面幅に収まる。タッチ操作を想定し、ホバーだけに情報を持たせない。
 
 ## 応答の書き方
@@ -98,5 +117,7 @@ iframe の幅は会話幅に追従する。固定 px 幅を書かず、`%` か `
 
 - 何も出ない → `title` がスラッグか、`html` が空でないか、断片に `<html>` が混ざっていないか
 - 真っ白 → JavaScript の例外。`document.getElementById` の id が一致しているか確認する
-- 色が変 → リテラル色を使っていないか。`var(--foreground)` などに置き換える
+- **ダークモードで白く浮く** → リテラル色を使っている。`var(--vz-surface)` などに置き換える
+- 色が黒一色 → `fill: var(--viz-series-1)` を指定しているか。`currentColor` は本文色になる
 - はみ出す → 固定幅をやめる。`max-width: 100%` と `overflow: auto` を入れる
+- 高さが足りない → 通常は自動。`position: absolute` を使うと計測できないので避ける
