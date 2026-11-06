@@ -1,0 +1,10 @@
+# Registers this package as one DSH bundle.
+#
+# The host half provides the `visualize` tool; the client half renders that
+# tool's result as a sandboxed iframe inside the conversation. They ship
+# together because the client module system maps one package to one browser
+# module, so the two halves cannot be separate packages.
+- insert:
+    - id: dsh-visualize
+      name: "dsh-visualize"
+      config: {}
