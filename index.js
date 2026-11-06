@@ -28,6 +28,9 @@ export function apply(ctx) {
   ctx.tools.register(defineTool({
     name: 'visualize',
     description: 'Show an interactive HTML visualization inline in the conversation. '
+      + 'Call it as the LAST tool call of the turn, immediately before your final message: '
+      + 'the card only becomes readable once the response settles, so calling it mid-turn scrolls it out of view. '
+      + 'Finish every lookup and calculation first. '
       + 'Use it when the user needs to see or explore something and a picture explains it better than prose: '
       + 'a chart, a simulation, a state machine, an interface mockup, a map, a timeline. '
       + 'Do not use it for a plain table (answer with Markdown), for a static labelled structure (answer with a Mermaid fence), '
