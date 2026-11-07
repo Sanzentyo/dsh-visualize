@@ -199,7 +199,7 @@ viz.chart(document.getElementById('chart'), {
 `box-plot` は列名で指定する。`min` / `q1` / `median` / `q3` / `max` を `columns` の名前で渡すので、
 列の順序に依存しない。足りなければエラーになる。
 
-**未対応**: sankey、横棒、アニメーション。これらが要るときは SVG を自分で書く（下の落とし穴を読む）。
+**未対応**: なし（全 11 型が使える）。
 
 **横軸のラベルは自動で間引かれる。** 入る本数は最も長いラベルの文字数から決まるので、
 点が多い系列でも潰れない。自分でラベルを間引く必要はない。
@@ -208,6 +208,61 @@ viz.chart(document.getElementById('chart'), {
 
 **`format` を渡すと軸とツールチップの単位が揃う。** `percent` は `0.6671` を `66.7%` に、
 `currency` は `Intl.NumberFormat` で通貨にする。
+
+### 系列の表示切替
+
+**凡例がそのままスイッチになる。** 複数系列のとき、凡例を押すとその系列が消え、
+もう一度押すと戻る。隠した系列も軸の範囲には残るので、他の系列が伸び縮みしない。
+
+```js
+viz.chart(el, {
+  y: ['cumulative', 'rolling20', 'target'],
+  legendToggle: false,        // 切替を無効にする
+  hiddenSeries: ['target'],   // 初期状態で隠す
+  onSeriesToggle: (name, shown) => { … }
+})
+```
+
+### コントロールと連動
+
+`viz.controls` は宣言から操作 UI を作る。**どの操作を出すかは作る側が決める。**
+
+```js
+var ctl = viz.controls(el, [
+  { name: 'sort', label: '並び順', type: 'select', value: 'none',
+    options: [['none', '呼び出し順'], ['desc', '降順'], ['asc', '昇順']] },
+  { name: 'threshold', label: '基準線', type: 'range', min: 0, max: 1, step: 0.05, value: 0.9 },
+  { name: 'stack', label: '積み上げ', type: 'checkbox', value: false }
+])
+viz.bind(ctl, function (v) { return { …config, … } }, chart)
+```
+
+`type` は `select` / `range` / `checkbox` / `number` / `text`。`viz.bind` が `input` / `change` を
+拾って `chart.update()` に渡す。初回も同じ経路を通るので、初期値とグラフが食い違わない。
+
+**意味のある操作を選ぶ。** 「倍率」のように値を一律に掛けるだけの操作は、棒が伸び縮みする
+だけで何も分からない。閾値・絞り込み・ビン幅・系列の選択のように、**見え方が変わる**ものを選ぶ。
+
+### アニメーション
+
+`update()` で値が変わると、bar / line / area / scatter は**図形を再利用して滑る**。
+それ以外の型は作り直すので瞬時に切り替わる。初回描画は動かない
+（`vz-animate` クラスが 1 フレーム後に付くため）。`prefers-reduced-motion: reduce` では
+transition 自体が無効になる。
+
+### 状態の報告
+
+読者が選んだ内容をモデルに伝えられる。
+
+```js
+viz.state({ sort: 'desc', hidden: ['target'], threshold: 0.9 })
+```
+
+フレームは不透明オリジンなのでホストを直接叩けない。親ページへ `postMessage` し、
+プラグインのブラウザ側が `/api/visualize/state` へ中継、ホストが
+`<sessionId>/state/<title>.json` に保存する。モデルは `visualize_state` ツールで読む。
+
+**復元は未実装。** 保存はするが、再描画時に読み戻す経路はない。
 
 ## 断片の規約
 
