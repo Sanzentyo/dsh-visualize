@@ -34,7 +34,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@511c3fdade (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@4ad05df376 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -902,19 +902,16 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
     }
     return {
       update: function (next) {
-        // A bar chart keeps its rects, so a changed value slides to its new
-        // height instead of being replaced. Every other type rebuilds: a keyed
-        // diff for paths and cells is not worth its weight here.
-        // Bar, line/area and scatter keep their marks, so a changed value moves
-        // to its new place instead of being replaced. Everything else rebuilds:
-        // a keyed diff for every type is not worth its weight here.
-        var sameShape = current.type === next.type
+        // The animated swap is bar-only. Line/area/scatter redraw everything:
+        // their title, reference lines and axis scale change with the data, and
+        // a marks-only swap left those stale (measured: a threshold slider
+        // moved the marks but the reference line and title never followed).
+        // A keyed diff for paths and cells is not worth its weight here.
+        var sameShape = current.type === 'bar' && next.type === 'bar'
           && (current.rows || []).length === (next.rows || []).length
           && host.querySelector('svg') !== null;
-        var kinds = { bar: '[data-bar]', line: '[data-pt]', area: '[data-pt]', scatter: '[data-pt]' };
-        var selector = kinds[next.type];
-        if (sameShape && selector !== undefined && current.type === next.type) {
-          var before = host.querySelectorAll(selector);
+        if (sameShape) {
+          var before = host.querySelectorAll('[data-bar]');
           var probe = document.createElement('div');
           try {
             draw(probe, next);
@@ -923,11 +920,9 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
             current = next;
             return;
           }
-          var after = probe.querySelectorAll(selector);
+          var after = probe.querySelectorAll('[data-bar]');
           if (before.length === after.length) {
-            var attrs = next.type === 'bar'
-              ? ['x', 'y', 'width', 'height', 'fill']
-              : ['cx', 'cy', 'fill'];
+            var attrs = ['x', 'y', 'width', 'height', 'fill'];
             for (var i = 0; i < before.length; i++) {
               attrs.forEach(function (a) {
                 var v = after[i].getAttribute(a);
@@ -935,14 +930,6 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
               });
               var tip = after[i].getAttribute('data-tooltip');
               if (tip !== null) before[i].setAttribute('data-tooltip', tip);
-            }
-            // The connecting path has no per-point attribute; replace its d.
-            var lineBefore = host.querySelectorAll('[data-line]');
-            var lineAfter = probe.querySelectorAll('[data-line]');
-            if (lineBefore.length === lineAfter.length) {
-              for (var j = 0; j < lineBefore.length; j++) {
-                lineBefore[j].setAttribute('d', lineAfter[j].getAttribute('d'));
-              }
             }
             current = next;
             return;
