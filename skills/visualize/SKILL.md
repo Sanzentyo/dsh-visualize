@@ -47,12 +47,28 @@ visualize(
   title: "cache-hit-rate",     # 小文字 ASCII スラッグ。ファイル名になる
   html: "<div id=\"viz\">…</div>",
   mode: "regular" | "wide",    # 省略時 regular
-  path: ".dsh-visualize/cache-hit-rate.html"   # 省略可
+  path: "…"                    # 省略可。既定はスレッドの保存先
 )
 ```
 
 ツールは `{ path, title, mode, bytes }` を返す。**HTML はツール結果に含めない**
 （結果は以後の全リクエストに載るため）。クライアントが `/api/file` 経由で読む。
+
+**ファイルはスレッド単位で 1 箇所に集まる。** 既定の保存先は
+`~/.dsh/visualize/<sessionId>/<title>.html`。ワークスペースごとに `.dsh-visualize/` を作らない。
+7 日を過ぎたものは次の書き込み時に消え、空になったスレッドのディレクトリも消える。
+
+**フェンスには返ってきた `path` をそのまま書く。**
+
+````
+```visualize
+{"path": "C:\\Users\\…\\.dsh\\visualize\\session-…\\cache-hit-rate.html", "mode": "regular"}
+```
+````
+
+**相対パスは書かない。** `api/file` は絶対パス以外を 400 で拒否する
+（実測: `?path=.dsh-visualize/x.html` → 400、絶対パス → 200）。
+マークダウン画像の解決器も相対パスでは `undefined` を返すので、代わりにはならない。
 
 ## 断片の規約
 

@@ -9,7 +9,7 @@
  * kilobytes and the result would sit in every later request, so the tool
  * returns a path and the client reads the bytes through `/api/file`.
  */
-import { mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, rm, rmdir, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -25,35 +25,61 @@ export const inject = ['tools']
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000
 
 /**
- * The one directory every visualization lands in.
+ * The one directory every visualization lands in: the store root, then one
+ * directory per Session, so a thread's visualizations stay together and the
+ * root never becomes a flat pile.
+ * @param sessionId - the owning Session.
  * @returns an absolute path under the Harness home.
  */
-function storeDir() {
+function storeDir(sessionId) {
   const home = process.env.DSH_HOME ?? join(homedir(), '.dsh')
-  return join(home, DEFAULT_DIR)
+  return join(home, DEFAULT_DIR, sessionId)
 }
 
 /**
  * Delete stale visualizations so the store does not grow without bound.
- * Best effort: a file that cannot be removed is left for the next write.
- * @param store - the store directory.
+ *
+ * Walks the store root one level down, because each Session owns a directory
+ * and an old Session's files would otherwise never be reached. Best effort: a
+ * file that cannot be removed is left for the next write.
+ * @param root - the store root.
  */
-async function prune(store) {
-  let names
+async function prune(root) {
+  let sessions
   try {
-    names = await readdir(store)
+    sessions = await readdir(root, { withFileTypes: true })
   } catch {
     return
   }
   const cutoff = Date.now() - RETENTION_MS
-  for (const entry of names) {
-    if (!entry.endsWith('.html')) continue
-    const path = join(store, entry)
+  for (const session of sessions) {
+    if (!session.isDirectory()) continue
+    const dir = join(root, session.name)
+    let names
     try {
-      const info = await stat(path)
-      if (info.mtimeMs < cutoff) await rm(path, { force: true })
+      names = await readdir(dir)
     } catch {
-      // A concurrent prune or a locked file: leave it.
+      continue
+    }
+    let kept = 0
+    for (const entry of names) {
+      if (!entry.endsWith('.html')) continue
+      const path = join(dir, entry)
+      try {
+        const info = await stat(path)
+        if (info.mtimeMs < cutoff) await rm(path, { force: true })
+        else kept += 1
+      } catch {
+        kept += 1
+      }
+    }
+    // A Session whose files have all aged out leaves an empty directory behind.
+    if (kept === 0) {
+      try {
+        await rmdir(dir)
+      } catch {
+        // Not empty after all, or another writer is active.
+      }
     }
   }
 }
@@ -116,18 +142,19 @@ export function apply(ctx) {
       },
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
     },
-    async execute(args) {
+    async execute(args, exec) {
       const title = assertTitle(args.title)
       const html = assertHtml(args.html)
       const mode = assertMode(args.mode)
-      // One store for every workspace, so a project never accumulates its own
-      // artifact directory. `api/file` needs the absolute path this returns.
-      const store = storeDir()
+      // One store per Session, so a thread's visualizations stay together and no
+      // workspace accumulates its own artifact directory. `api/file` needs the
+      // absolute path this returns.
+      const store = storeDir(String(exec.agent.session.id))
       const target = destination(store, title, args.path)
 
       await mkdir(dirname(target), { recursive: true })
       await writeFile(target, html, 'utf8')
-      await prune(store)
+      await prune(join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), DEFAULT_DIR))
 
       return { path: target, title, mode, bytes: Buffer.byteLength(html, 'utf8') }
     },
