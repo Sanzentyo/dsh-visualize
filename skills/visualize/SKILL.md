@@ -114,6 +114,11 @@ iframe には次の CSS と小さなランタイムが注入済み。**自前で
   塗り潰される
 - 装飾の塗りは `pointer-events: none` を付ける。でないとクリックを奪う
 - `viewBox` は固定幅で縮めない。狭い幅では目盛りを減らす
+- 縦軸のラベルは回転させる。左上に水平で置くとタイトルと重なる
+
+**ランタイムは断片より前に注入される。** 断片の `<script>` はパース時に走るので、
+`viz` はその時点で定義済み。逆順にすると `viz is not defined` で**何も描かれない**
+（実際に踏んだ。見出しだけ出てグラフが消えた）。
 
 **フェンスには返ってきた `path` をそのまま書く。**
 
@@ -126,6 +131,68 @@ iframe には次の CSS と小さなランタイムが注入済み。**自前で
 **相対パスは書かない。** `api/file` は絶対パス以外を 400 で拒否する
 （実測: `?path=.dsh-visualize/x.html` → 400、絶対パス → 200）。
 マークダウン画像の解決器も相対パスでは `undefined` を返すので、代わりにはならない。
+
+## 余白 — 外側は 0、内側は自分で足す
+
+**body の padding は 0、見出しと段落の margin も 0。** 断片が自分で間隔を足す。
+Codex と同じモデルで、これが「提示の一部」に見える理由。
+
+最も簡単なのは `.viz-stack` で包むこと。子要素の間に 1×、見出しの直後は 0.5× が入る。
+
+```html
+<div class="viz-stack">
+  <h2>見出し</h2>
+  <div id="chart"></div>
+  <p class="muted">補足</p>
+</div>
+```
+
+個別に調整するときは `--vz-font-size` の倍数で書く。
+
+| 間隔 | 使う場所 |
+|---|---|
+| `calc(var(--vz-font-size) * 1)` | ブロック間、セクション見出しの前 |
+| `calc(var(--vz-font-size) * .5)` | 見出しから図へ |
+| `calc(var(--vz-font-size) * .25)` | 見出しから補助テキストへ |
+
+**外側の縁に余白を付けない。** `body` に padding を足すと、カードの中に箱があるように見える。
+
+## チャート — `viz.chart`
+
+軸・目盛り・凡例・ツールチップはランタイムが描く。**SVG を手で組まない。**
+
+```html
+<div id="chart"></div>
+<script>
+viz.chart(document.getElementById('chart'), {
+  type: 'bar',                       // bar | line | area | scatter | pie | sparkline
+  columns: ['gate', 'compile', 'bundle'],
+  rows: [['Client', 84.09, 113.64], ['Host', 2.85, 80.16]],
+  x: 'gate',
+  y: ['compile', 'bundle'],          // 配列で複数系列
+  stacked: true,                     // bar / area
+  format: { style: 'percent', maximumFractionDigits: 1 },
+  referenceLines: [{ value: 0.9, label: '目標 90%' }],
+  title: 'ビルド時間', yLabel: '秒', height: 240
+})
+</script>
+```
+
+`update(config)` を返すので、操作に応じた再描画もできる。
+
+**`type` を選ぶ基準**:
+
+| 見たいもの | type |
+|---|---|
+| 推移 | `line` |
+| 推移と量 | `area` |
+| 比較 | `bar`（`stacked` で内訳） |
+| 2 変数の関係 | `scatter` |
+| 構成比 | `pie` |
+| 一覧の中の小さな推移 | `sparkline` |
+
+**未対応**: heatmap / box-plot / waterfall / funnel / sankey / ranking、横棒、アニメーション。
+これらが要るときは SVG を自分で書く（下の落とし穴を読む）。
 
 ## 断片の規約
 
