@@ -165,7 +165,7 @@ Codex と同じモデルで、これが「提示の一部」に見える理由�
 <div id="chart"></div>
 <script>
 viz.chart(document.getElementById('chart'), {
-  type: 'bar',                       // bar | line | area | scatter | pie | sparkline
+  type: 'bar',                       // 下の表を参照
   columns: ['gate', 'compile', 'bundle'],
   rows: [['Client', 84.09, 113.64], ['Host', 2.85, 80.16]],
   x: 'gate',
@@ -180,19 +180,34 @@ viz.chart(document.getElementById('chart'), {
 
 `update(config)` を返すので、操作に応じた再描画もできる。
 
-**`type` を選ぶ基準**:
+**型の一覧**:
 
-| 見たいもの | type |
-|---|---|
-| 推移 | `line` |
-| 推移と量 | `area` |
-| 比較 | `bar`（`stacked` で内訳） |
-| 2 変数の関係 | `scatter` |
-| 構成比 | `pie` |
-| 一覧の中の小さな推移 | `sparkline` |
+| type | 見たいもの | columns |
+|---|---|---|
+| `line` | 推移 | `[x, y…]` |
+| `area` | 推移と量 | `[x, y…]` |
+| `bar` | 比較 | `[x, y…]` |
+| `scatter` | 2 変数の関係 | `[x, y…]` |
+| `pie` | 構成比 | `[label, value]` |
+| `sparkline` | 一覧の中の小さな推移 | `[x, y]` |
+| `ranking` | 名前と値の一覧（**自動で降順ソート**） | `[label, value]` |
+| `waterfall` | 増減の積み上げ（正＝系列色、負＝エラー色） | `[step, delta]` |
+| `heatmap` | 2 軸の格子（値の大きさを不透明度で表す） | `[x, y, value]` |
+| `funnel` | 段階ごとの減少（幅が値に比例） | `[stage, value]` |
+| `box-plot` | 分布の要約 | `[label, min, q1, median, q3, max]` |
 
-**未対応**: heatmap / box-plot / waterfall / funnel / sankey / ranking、横棒、アニメーション。
-これらが要るときは SVG を自分で書く（下の落とし穴を読む）。
+`box-plot` は列名で指定する。`min` / `q1` / `median` / `q3` / `max` を `columns` の名前で渡すので、
+列の順序に依存しない。足りなければエラーになる。
+
+**未対応**: sankey、横棒、アニメーション。これらが要るときは SVG を自分で書く（下の落とし穴を読む）。
+
+**横軸のラベルは自動で間引かれる。** 入る本数は最も長いラベルの文字数から決まるので、
+点が多い系列でも潰れない。自分でラベルを間引く必要はない。
+
+**縦軸の目盛りは 1・2・5・10 に丸められる。** `0 / 25 / 50 / 75 / 100` のような読みやすい刻みになる。
+
+**`format` を渡すと軸とツールチップの単位が揃う。** `percent` は `0.6671` を `66.7%` に、
+`currency` は `Intl.NumberFormat` で通貨にする。
 
 ## 断片の規約
 
