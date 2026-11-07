@@ -116,7 +116,7 @@ iframe には次の CSS と小さなランタイムが注入済み。**自前で
 
 | 用途 | クラス / 属性 |
 |---|---|
-| 面 | `.card` `.viz-stat` `.viz-stat-value` `.viz-grid` `.viz-row` `.viz-badge` `<hr>` |
+| 面 | `.panel` `.viz-stat` `.viz-stat-value` `.viz-grid` `.viz-row` `.viz-badge` `<hr>` |
 | 操作 | `.btn` `.btn-primary` `.btn-ghost` `.btn-block` |
 | 入力 | `.form-label` `.form-control` `.form-select` `.form-range` `.form-check` `.form-check-input` |
 | タブ | `.nav-pills` + `.nav-link`（`role="tablist"` / `role="tab"` / `[role="tabpanel"]`） |

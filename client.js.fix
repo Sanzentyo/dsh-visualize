@@ -1,0 +1,6 @@
+    const FRAME_CARD_CSS = `body { padding: 14px 16px 16px; }`
+
+    /** The script runtime in document order, ready to inline before a fragment. */
+    const FRAME_SCRIPT = FRAME_RUNTIME + '\n' + FRAME_CHART
+
+    // </generated:frame-runtime>
