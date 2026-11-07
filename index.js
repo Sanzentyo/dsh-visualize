@@ -382,9 +382,8 @@ export function apply(ctx) {
         mode,
         card,
         bytes: Buffer.byteLength(html, 'utf8'),
-        sourceRows: rowCount,
-        groups: data.length,
-        data,
+        rows: data.length,
+        groups: data,
       }
     },
   }))
