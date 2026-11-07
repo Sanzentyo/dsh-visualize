@@ -17,6 +17,11 @@ window.__ModuleLoader__.load({
   id: 'dsh-visualize',
   factory(require) {
     const React = require('react')
+    // The frame runtime and stylesheet live in the Harness's primitives
+    // package — the same source the markdown fence injects. One source of
+    // truth: a fragment can rely on `viz` and the utility classes on every
+    // surface that draws it, fence or tool card alike.
+    const primitives = require('@deepseek-ai/dsh-client-ui-primitives')
     const h = React.createElement
 
     /**
@@ -83,46 +88,13 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * The frame's own stylesheet. Structure only: every colour resolves through
-     * a custom property, so a fragment cannot pin itself to one theme.
+     * The frame's stylesheet comes from the shared primitives package
+     * (`primitives.VISUALIZE_CSS`), so the tool card renders with the same
+     * rules as a markdown fence: outer padding 0, `.viz-stack` spacing, the
+     * utility classes and the tooltip styles. This plugin used to carry its
+     * own copy, which drifted — a fragment that relied on `.viz-stack` or
+     * `viz.chart` worked in a fence and broke here.
      */
-    const BASE_CSS = `
-html, body { margin: 0; background: transparent; }
-body {
-  color: var(--vz-text);
-  font-family: var(--vz-font, system-ui, sans-serif);
-  font-size: var(--vz-font-size, 14px);
-  line-height: 1.55;
-  padding: 14px 16px 16px;
-  -webkit-text-size-adjust: 100%;
-  font-variant-numeric: tabular-nums;
-}
-h1, h2, h3 { margin: 0 0 .45em; font-weight: 500; letter-spacing: -.005em; }
-h1 { font-size: 1.05em; }
-h2, h3 { font-size: .95em; }
-p { margin: 0 0 .7em; }
-p:last-child, table:last-child, svg:last-child { margin-bottom: 0; }
-a { color: var(--vz-accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
-table { border-collapse: collapse; width: 100%; }
-th, td { padding: 3px 10px; border-bottom: 1px solid var(--vz-border); text-align: right; }
-th { color: var(--vz-dim); font-weight: 500; }
-th:first-child, td:first-child { text-align: left; }
-tr:last-child td { border-bottom: 0; }
-.muted { color: var(--vz-dim); }
-.card {
-  background: var(--vz-surface);
-  border: 1px solid var(--vz-border);
-  border-radius: 10px;
-  padding: 12px 14px;
-}
-code, pre {
-  font-family: var(--vz-font-code, ui-monospace, monospace);
-  background: var(--vz-code-bg, transparent);
-  border-radius: 4px;
-}
-svg { display: block; max-width: 100%; height: auto; }
-`
 
     /** True when the Harness is showing its dark palette. */
     function hostIsDark() {
@@ -284,6 +256,7 @@ svg { display: block; max-width: 100%; height: auto; }
       const payload = React.useMemo(() => payloadOf(block), [block])
       const revision = useThemeRevision()
       const [html, setHtml] = React.useState(undefined)
+      const [restored, setRestored] = React.useState(null)
       const [failure, setFailure] = React.useState(undefined)
       const [open, setOpen] = React.useState(true)
       const [hover, setHover] = React.useState(false)
@@ -296,12 +269,27 @@ svg { display: block; max-width: 100%; height: auto; }
         let live = true
         setFailure(undefined)
         setHtml(undefined)
-        fetch(fileUrl(payload.path))
+        setRestored(null)
+        // The fragment's viz.restore() starts from what the reader last chose,
+        // so fetch the stored snapshot the same way the markdown fence does.
+        const stateUrl = new URL('api/visualize/state', document.baseURI)
+        stateUrl.searchParams.set('session', sessionOf(payload.path) ?? '')
+        stateUrl.searchParams.set('title', titleOf(payload.path) ?? '')
+        const readState = fetch(stateUrl.toString())
+          .then(response => (response.ok ? response.text() : 'null'))
+          .then(text => { try { return JSON.parse(text) } catch { return null } })
+          .catch(() => null)
+        const readHtml = fetch(fileUrl(payload.path))
           .then(response => {
             if (!response.ok) throw new Error(`HTTP ${response.status}`)
             return response.text()
           })
-          .then(text => { if (live) setHtml(text) })
+        Promise.all([readHtml, readState])
+          .then(([text, state]) => {
+            if (!live) return
+            setRestored(state)
+            setHtml(text)
+          })
           .catch(error => { if (live) setFailure(String(error && error.message ? error.message : error)) })
         return () => { live = false }
       }, [payload === undefined ? '' : payload.path])
@@ -330,7 +318,11 @@ svg { display: block; max-width: 100%; height: auto; }
         ? undefined
         : `<!doctype html><html><head><meta charset="utf-8">`
           + `<meta name="viewport" content="width=device-width, initial-scale=1">`
-          + `<style>${themeCss()}</style><style>${BASE_CSS}</style></head><body>`
+          + `<style>${themeCss()}</style><style>${primitives.VISUALIZE_CSS}</style></head><body>`
+          + `<script>window.__dshVizPath=${JSON.stringify(payload.path)}</script>`
+          + `<script>window.__dshVizSession=${JSON.stringify(sessionOf(payload.path) ?? '')}</script>`
+          + `<script>window.__dshVizState=${JSON.stringify(restored ?? null)}</script>`
+          + `<script>${primitives.VISUALIZE_FRAME_RUNTIME}</script>`
           + html + heightReporter(nonce) + `</body></html>`
 
       // A full-width button, so the whole header is a hit target on a phone.

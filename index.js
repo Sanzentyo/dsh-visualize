@@ -9,11 +9,12 @@
  * kilobytes and the result would sit in every later request, so the tool
  * returns a path and the client reads the bytes through `/api/file`.
  */
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, sep } from 'node:path'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { assertHtml, assertMode, assertTitle, DEFAULT_DIR, destination, MODES } from './lib/validate.js'
+import { assertHtml, assertMode, assertTitle, DEFAULT_DIR, destination, MAX_BYTES, MODES } from './lib/validate.js'
+import { buildCsvChart, CHART_TYPES, FUNCS, MAX_CSV_BYTES } from './lib/csv.js'
 
 /** Stable Loader identity. */
 export const name = 'dsh-visualize'
@@ -249,6 +250,123 @@ export function apply(ctx) {
       }
 
       return { path: target, title, mode, bytes: Buffer.byteLength(html, 'utf8'), assets }
+    },
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'visualize_csv',
+    description: 'Load original data from a CSV file, aggregate it (group by + sum/avg/count/min/max), '
+      + 'and draw the aggregated result as an inline chart. '
+      + 'Use it when the user hands you raw data (a CSV or TSV export) and wants to see it as a chart: '
+      + 'the aggregation runs host-side, the chart renders from the aggregated result, '
+      + 'and no data travels through the tool result. '
+      + 'Call it as the LAST tool call of the turn, immediately before your final message. '
+      + 'For anything a plain group-by cannot express, read the CSV yourself and call `visualize` with a hand-built fragment.',
+    parameters: {
+      csv_path: {
+        type: 'string',
+        required: true,
+        description: 'Path of the CSV file to load (absolute, or relative to the Session working directory).',
+      },
+      group_by: {
+        type: 'string',
+        required: true,
+        description: 'Column name to group the rows by.',
+      },
+      aggregate: {
+        type: 'string',
+        required: true,
+        description: 'Column name to aggregate. Required for sum/avg/min/max; ignored (may be empty) for count.',
+      },
+      func: {
+        type: 'string',
+        enum: FUNCS,
+        description: 'Aggregation function. Defaults to sum.',
+      },
+      title: {
+        type: 'string',
+        required: true,
+        description: 'Lowercase ASCII slug used as the file name and shown as the chart heading.',
+      },
+      chart_type: {
+        type: 'string',
+        enum: CHART_TYPES,
+        description: 'Bar (default), line, or pie.',
+      },
+      y_label: {
+        type: 'string',
+        description: 'Axis label for the aggregated value.',
+      },
+      mode: {
+        type: 'string',
+        enum: MODES,
+        description: 'Width mode of the card. Defaults to regular.',
+      },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          path: { type: 'string', required: true },
+          title: { type: 'string', required: true },
+          mode: { type: 'string', required: true },
+          bytes: { type: 'integer', required: true },
+          rows: { type: 'integer', required: true, description: 'Aggregated group count.' },
+          groups: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                key: { type: 'string', required: true },
+                value: { type: 'number', required: true },
+                count: { type: 'integer', required: true },
+              },
+            },
+            description: 'The aggregated rows, so the answer can cite numbers without re-reading the CSV.',
+          },
+        },
+      },
+      render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
+    },
+    async execute(args, exec) {
+      const title = assertTitle(args.title)
+      const mode = assertMode(args.mode)
+      let csvStat
+      try {
+        csvStat = await stat(args.csv_path)
+      } catch {
+        throw new Error(`visualize_csv: cannot read csv at "${args.csv_path}"`)
+      }
+      if (csvStat.size > MAX_CSV_BYTES) {
+        throw new Error(`visualize_csv: csv exceeds ${MAX_CSV_BYTES} bytes; sample or split it first`)
+      }
+      const text = await readFile(args.csv_path, 'utf8')
+      // All decisions — parsing, validation, aggregation, fragment shape — live
+      // in lib/csv.js, so they are testable without a running Harness.
+      const { rowCount, data, html } = buildCsvChart(text, {
+        title,
+        groupBy: args.group_by,
+        aggregate: args.aggregate,
+        func: args.func,
+        chartType: args.chart_type,
+        yLabel: args.y_label,
+      })
+      const store = storeDir(String(exec.agent.session.id))
+      const target = destination(store, title, args.path)
+      await assertNotReplaced(target, html)
+      await mkdir(dirname(target), { recursive: true })
+      await writeFile(target, html, 'utf8')
+      return {
+        path: target,
+        title,
+        mode,
+        bytes: Buffer.byteLength(html, 'utf8'),
+        sourceRows: rowCount,
+        groups: data.length,
+        data,
+      }
     },
   }))
 }
