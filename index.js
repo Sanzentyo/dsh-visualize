@@ -161,13 +161,12 @@ export function apply(ctx) {
 
   ctx.tools.register(defineTool({
     name: 'visualize',
-    description: 'Show an interactive HTML visualization inline in the conversation. '
-      + 'Call it as the LAST tool call of the turn, immediately before your final message: '
-      + 'the card only becomes readable once the response settles, so calling it mid-turn scrolls it out of view. '
-      + 'Finish every lookup and calculation first. '
-      + 'The tool card renders at the call position itself, so do NOT also put the returned path in a visualize '
-      + 'fence in the same message — that shows the same visualization twice. '
-      + 'Use a fence only to reference a visualization written earlier (a re-show, or a file a script wrote). '
+    description: 'Write an interactive HTML visualization file for this conversation. '
+      + 'The tool WRITES the file and returns its path; display it by putting the returned path in a visualize '
+      + 'fence in your final message — the fence renders the chart as part of the message body. '
+      + 'Tool cards collapse in most clients, so the fence is the display surface, not the card. '
+      + 'Finish every lookup and calculation before calling: the fence needs the returned path, '
+      + 'so the call lands in the later half of the turn. '
       + 'Use it when the user needs to see or explore something and a picture explains it better than prose: '
       + 'a chart, a simulation, a state machine, an interface mockup, a map, a timeline. '
       + 'Do not use it for a plain table (answer with Markdown), for a static labelled structure (answer with a Mermaid fence), '
@@ -266,12 +265,12 @@ export function apply(ctx) {
   ctx.tools.register(defineTool({
     name: 'visualize_csv',
     description: 'Load original data from a CSV file, aggregate it (group by + sum/avg/count/min/max), '
-      + 'and draw the aggregated result as an inline chart. '
+      + 'and write the aggregated result as a chart file. '
       + 'Use it when the user hands you raw data (a CSV or TSV export) and wants to see it as a chart: '
       + 'the aggregation runs host-side, the chart renders from the aggregated result, '
       + 'and no data travels through the tool result. '
-      + 'Call it as the LAST tool call of the turn, immediately before your final message; '
-      + 'the tool card renders at the call position, so do not also fence the returned path in the same message. '
+      + 'The tool WRITES the file and returns its path; display it by putting the returned path in a '
+      + 'visualize fence in your final message — tool cards collapse, the fence does not. '
       + 'For anything a plain group-by cannot express, read the CSV yourself and call `visualize` with a hand-built fragment.',
     parameters: {
       csv_path: {
