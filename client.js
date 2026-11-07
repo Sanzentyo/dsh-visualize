@@ -325,6 +325,17 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
     }
     var W = Math.max(240, host.clientWidth || 640);
     var H = config.height || (type === 'sparkline' ? 48 : 240);
+    // aspect は「高さ ÷ 幅」の比。描画時の実幅から高さを求める。SVG は
+    // width:100% + viewBox なので、以後のリサイズでも比は保たれる。
+    // height(px) の明示があるならそちらが優先。
+    if (config.aspect !== undefined && config.height === undefined) {
+      H = Math.max(120, Math.round(W * config.aspect));
+    }
+    // 描画時に測った幅よりコンテナが広いとき、SVG は maxWidth で止まって
+    // 左に寄ってしまう。既定で中央に置き、align で左右を指定できるようにする。
+    host.style.display = 'flex';
+    host.style.justifyContent = config.align === 'left' ? 'flex-start'
+      : config.align === 'right' ? 'flex-end' : 'center';
     var padL = type === 'sparkline' ? 2 : 52, padR = 12, padT = config.title ? 26 : 12, padB = type === 'sparkline' ? 2 : 34;
     var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, width: '100%', role: 'img' });
     svg.style.maxWidth = W + 'px';
@@ -1434,11 +1445,12 @@ body { padding: 14px 16px 16px; }`
 
       if (!card) {
         // 既定は本文に溶け込む。枠も見出しも付けず、呼び出し位置に可視化だけを置く。
+        // 幅は本文カラム(--dsh-chat-content-width、最大 920px)いっぱいに追従させる。
         return h('div', {
           'data-dsh-visualize': payload.title,
           style: {
             margin: '10px 0',
-            maxWidth: wide ? '100%' : '780px',
+            maxWidth: '100%',
             color: 'var(--dsw-alias-label-primary)',
           },
         }, body)
@@ -1451,7 +1463,7 @@ body { padding: 14px 16px 16px; }`
           border: '1px solid var(--dsw-alias-border-l1)',
           borderRadius: '12px',
           overflow: 'hidden',
-          maxWidth: wide ? '100%' : '780px',
+          maxWidth: '100%',
           background: 'var(--dsw-alias-bg-layer-1)',
           color: 'var(--dsw-alias-label-primary)',
         },
