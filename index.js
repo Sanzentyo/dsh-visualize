@@ -165,6 +165,9 @@ export function apply(ctx) {
       + 'Call it as the LAST tool call of the turn, immediately before your final message: '
       + 'the card only becomes readable once the response settles, so calling it mid-turn scrolls it out of view. '
       + 'Finish every lookup and calculation first. '
+      + 'The tool card renders at the call position itself, so do NOT also put the returned path in a visualize '
+      + 'fence in the same message — that shows the same visualization twice. '
+      + 'Use a fence only to reference a visualization written earlier (a re-show, or a file a script wrote). '
       + 'Use it when the user needs to see or explore something and a picture explains it better than prose: '
       + 'a chart, a simulation, a state machine, an interface mockup, a map, a timeline. '
       + 'Do not use it for a plain table (answer with Markdown), for a static labelled structure (answer with a Mermaid fence), '
@@ -260,7 +263,8 @@ export function apply(ctx) {
       + 'Use it when the user hands you raw data (a CSV or TSV export) and wants to see it as a chart: '
       + 'the aggregation runs host-side, the chart renders from the aggregated result, '
       + 'and no data travels through the tool result. '
-      + 'Call it as the LAST tool call of the turn, immediately before your final message. '
+      + 'Call it as the LAST tool call of the turn, immediately before your final message; '
+      + 'the tool card renders at the call position, so do not also fence the returned path in the same message. '
       + 'For anything a plain group-by cannot express, read the CSV yourself and call `visualize` with a hand-built fragment.',
     parameters: {
       csv_path: {
