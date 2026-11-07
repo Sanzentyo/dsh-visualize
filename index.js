@@ -86,17 +86,32 @@ export function apply(ctx) {
   // a generated Remote.
   ctx.connection.fetch.register({
     path: '/api/visualize/state',
-    methods: ['POST'],
+    methods: ['GET', 'POST'],
     requestBody: 'buffered',
     fetch: async (request) => {
-      const body = JSON.parse(new TextDecoder().decode(request.body ?? new Uint8Array()))
-      const target = String(body.path ?? '')
       const root = join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), DEFAULT_DIR)
-      // Only a file this plugin owns may be written beside.
-      if (!isAbsolute(target) || !target.startsWith(root + sep)) {
-        return new Response('unknown visualization', { status: 400 })
+      const statePathOf = (target) => {
+        // Only a file this plugin owns may be read or written beside.
+        if (!isAbsolute(target) || !target.startsWith(root + sep)) return undefined
+        return join(dirname(target), 'state', `${basename(target, '.html')}.json`)
       }
-      const statePath = join(dirname(target), 'state', `${basename(target, '.html')}.json`)
+      if (request.method === 'GET') {
+        const target = new URL(request.url).searchParams.get('path') ?? ''
+        const statePath = statePathOf(target)
+        if (statePath === undefined) return new Response('unknown visualization', { status: 400 })
+        try {
+          return new Response(await readFile(statePath, 'utf8'), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          })
+        } catch {
+          // Nothing reported yet: the frame starts from its own defaults.
+          return new Response('null', { status: 200, headers: { 'content-type': 'application/json' } })
+        }
+      }
+      const body = JSON.parse(new TextDecoder().decode(request.body ?? new Uint8Array()))
+      const statePath = statePathOf(String(body.path ?? ''))
+      if (statePath === undefined) return new Response('unknown visualization', { status: 400 })
       await mkdir(dirname(statePath), { recursive: true })
       await writeFile(statePath, JSON.stringify(body.state ?? null), 'utf8')
       return new Response('ok', { status: 200 })
