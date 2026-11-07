@@ -9,9 +9,9 @@
  * kilobytes and the result would sit in every later request, so the tool
  * returns a path and the client reads the bytes through `/api/file`.
  */
-import { mkdir, readdir, rm, rmdir, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { assertHtml, assertMode, assertTitle, DEFAULT_DIR, destination, MODES } from './lib/validate.js'
 
@@ -21,13 +21,9 @@ export const name = 'dsh-visualize'
 /** Services this plugin needs. */
 export const inject = ['tools']
 
-/** Visualizations older than this are pruned on the next write. */
-const RETENTION_MS = 7 * 24 * 60 * 60 * 1000
-
 /**
- * The one directory every visualization lands in: the store root, then one
- * directory per Session, so a thread's visualizations stay together and the
- * root never becomes a flat pile.
+ * The directory one Session owns: the store root, then the Session id, so a
+ * thread's visualizations and their assets stay together.
  * @param sessionId - the owning Session.
  * @returns an absolute path under the Harness home.
  */
@@ -37,51 +33,47 @@ function storeDir(sessionId) {
 }
 
 /**
- * Delete stale visualizations so the store does not grow without bound.
+ * Reject a name that already holds different content.
  *
- * Walks the store root one level down, because each Session owns a directory
- * and an old Session's files would otherwise never be reached. Best effort: a
- * file that cannot be removed is left for the next write.
- * @param root - the store root.
+ * A transcript keeps the absolute path, so reusing a name silently would
+ * rewrite what an earlier message shows. Identical content is accepted, which
+ * makes a re-run of the same call idempotent.
+ * @param path - the destination file.
+ * @param html - the new fragment.
  */
-async function prune(root) {
-  let sessions
+async function assertNotReplaced(path, html) {
+  let existing
   try {
-    sessions = await readdir(root, { withFileTypes: true })
+    existing = await readFile(path, 'utf8')
   } catch {
     return
   }
-  const cutoff = Date.now() - RETENTION_MS
-  for (const session of sessions) {
-    if (!session.isDirectory()) continue
-    const dir = join(root, session.name)
-    let names
-    try {
-      names = await readdir(dir)
-    } catch {
-      continue
-    }
-    let kept = 0
-    for (const entry of names) {
-      if (!entry.endsWith('.html')) continue
-      const path = join(dir, entry)
-      try {
-        const info = await stat(path)
-        if (info.mtimeMs < cutoff) await rm(path, { force: true })
-        else kept += 1
-      } catch {
-        kept += 1
-      }
-    }
-    // A Session whose files have all aged out leaves an empty directory behind.
-    if (kept === 0) {
-      try {
-        await rmdir(dir)
-      } catch {
-        // Not empty after all, or another writer is active.
-      }
-    }
+  if (existing !== html) {
+    throw new Error(
+      `visualize: "${basename(path)}" already exists with different content; `
+      + 'pick another title, because an earlier message renders that file',
+    )
   }
+}
+
+/**
+ * Write one asset beside the visualization.
+ * @param dir - the Session's asset directory.
+ * @param asset - the declared name and base64 payload.
+ * @returns the written path.
+ */
+async function writeAsset(dir, asset) {
+  const name = String(asset.name ?? '')
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(name)) {
+    throw new Error(`visualize: asset name "${name}" must be a plain file name`)
+  }
+  const bytes = Buffer.from(String(asset.data ?? ''), 'base64')
+  if (bytes.length === 0) throw new Error(`visualize: asset "${name}" is empty`)
+  if (bytes.length > MAX_BYTES) throw new Error(`visualize: asset "${name}" exceeds ${MAX_BYTES} bytes`)
+  await mkdir(dir, { recursive: true })
+  const path = join(dir, name)
+  await writeFile(path, bytes)
+  return path
 }
 
 /**
@@ -126,7 +118,20 @@ export function apply(ctx) {
       },
       path: {
         type: 'string',
-        description: 'Destination file, relative to the working directory. Defaults to .dsh-visualize/<title>.html.',
+        description: 'Destination file. Defaults to the Session store, keyed by the title.',
+      },
+      assets: {
+        type: 'array',
+        description: 'Images or data files the fragment references. They land beside the visualization, '
+          + 'so the fragment reads them with a relative path such as assets/chart.png.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            name: { type: 'string', required: true, description: 'Plain file name, e.g. "chart.png".' },
+            data: { type: 'string', required: true, description: 'Base64-encoded bytes.' },
+          },
+        },
       },
     },
     output: {
@@ -138,6 +143,7 @@ export function apply(ctx) {
           title: { type: 'string', required: true },
           mode: { type: 'string', required: true },
           bytes: { type: 'integer', required: true },
+          assets: { type: 'array', items: { type: 'string' } },
         },
       },
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
@@ -152,11 +158,20 @@ export function apply(ctx) {
       const store = storeDir(String(exec.agent.session.id))
       const target = destination(store, title, args.path)
 
+      await assertNotReplaced(target, html)
       await mkdir(dirname(target), { recursive: true })
       await writeFile(target, html, 'utf8')
-      await prune(join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), DEFAULT_DIR))
 
-      return { path: target, title, mode, bytes: Buffer.byteLength(html, 'utf8') }
+      // Assets live beside the visualization, in the same Session directory, so
+      // a fragment can reference them by a relative path and nothing leaks into
+      // the workspace. `api/file` still needs the absolute URL, which the
+      // fragment builds from the page it was served from.
+      const assets = []
+      for (const asset of Array.isArray(args.assets) ? args.assets : []) {
+        assets.push(await writeAsset(join(store, 'assets'), asset))
+      }
+
+      return { path: target, title, mode, bytes: Buffer.byteLength(html, 'utf8'), assets }
     },
   }))
 }

@@ -55,8 +55,65 @@ visualize(
 （結果は以後の全リクエストに載るため）。クライアントが `/api/file` 経由で読む。
 
 **ファイルはスレッド単位で 1 箇所に集まる。** 既定の保存先は
-`~/.dsh/visualize/<sessionId>/<title>.html`。ワークスペースごとに `.dsh-visualize/` を作らない。
-7 日を過ぎたものは次の書き込み時に消え、空になったスレッドのディレクトリも消える。
+`~/.dsh/visualize/<sessionId>/<title>.html`、添付は同じ階層の `assets/`。
+ワークスペースごとに `.dsh-visualize/` を作らない。
+
+**古いファイルは消さない。** トランスクリプトは絶対パスを保持しているので、
+消すと過去のメッセージが描画できなくなる。容量が気になったら手で消す。
+
+**同じ title に別の内容は書けない。** 既存ファイルと内容が違えばツールが拒否する。
+過去のメッセージが指すファイルを黙って書き換えないため。同じ内容なら通る（再実行が冪等）。
+
+**セッションを複製しても壊れない。** フェンスは絶対パスを持つので、複製先の
+トランスクリプトは元セッションのファイルを指したまま描画できる。複製先で新しく
+描いたものは複製先のディレクトリに入る。
+
+**添付は `assets` で渡す。** base64 で `{ name, data }` を並べると
+`<sessionId>/assets/<name>` に書かれ、断片からは `assets/chart.png` で参照できる。
+
+## 使えるユーティリティ
+
+iframe には次の CSS と小さなランタイムが注入済み。**自前で組まない。**
+
+| 用途 | クラス / 属性 |
+|---|---|
+| 面 | `.card` `.viz-stat` `.viz-stat-value` `.viz-grid` `.viz-row` `.viz-badge` `<hr>` |
+| 操作 | `.btn` `.btn-primary` `.btn-ghost` `.btn-block` |
+| 入力 | `.form-label` `.form-control` `.form-select` `.form-range` `.form-check` `.form-check-input` |
+| タブ | `.nav-pills` + `.nav-link`（`role="tablist"` / `role="tab"` / `[role="tabpanel"]`） |
+| 表 | `.table` `.table-sm` `.table-responsive` |
+| 文字 | `.muted` `.text-small` `.text-destructive` `.text-end` `.text-center` `.text-nowrap` `.tabular-nums` `.sr-only` |
+| ツールチップ | `data-tooltip="…"` `data-tooltip-placement="top\|right\|bottom\|left"` |
+
+**ツールチップは属性だけ。** 位置決め・テーマ・衝突回避はランタイムがやる。
+`title` 属性は使わない。
+
+```html
+<button class="btn" data-tooltip="Reset the view">Reset</button>
+```
+
+**タブは JS を書かない。** `role` と `aria-controls` を正しく付ければ、
+クリックと矢印キーはランタイムが処理する。
+
+```html
+<div class="nav-pills" role="tablist" aria-label="Platform">
+  <button class="nav-link active" role="tab" id="mac" aria-controls="mac-panel" aria-selected="true" type="button">macOS</button>
+  <button class="nav-link" role="tab" id="linux" aria-controls="linux-panel" aria-selected="false" type="button">Linux</button>
+</div>
+<div id="mac-panel" role="tabpanel" aria-labelledby="mac">…</div>
+<div id="linux-panel" role="tabpanel" aria-labelledby="linux" hidden>…</div>
+```
+
+**アイコンは無い。** 必要な記号は SVG を自分で書くか、文字で代用する。
+
+**SVG を書くときの落とし穴**（実際に踏んだ）:
+
+- 図形要素に `display: block` を付ける。`<span>` や `<rect>` の親が inline のままだと
+  `height` / `width` が効かず、**何も見えない**
+- 軸・引き出し線は `<line>` か `fill="none"` を明示する。開いたパスは暗黙に閉じられて
+  塗り潰される
+- 装飾の塗りは `pointer-events: none` を付ける。でないとクリックを奪う
+- `viewBox` は固定幅で縮めない。狭い幅では目盛りを減らす
 
 **フェンスには返ってきた `path` をそのまま書く。**
 
