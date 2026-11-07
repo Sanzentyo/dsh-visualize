@@ -428,9 +428,32 @@ svg { display: block; max-width: 100%; height: auto; }
       }, [header, open ? body : null])
     }
 
+    /**
+     * Relay a visualization's interaction state to the host.
+     *
+     * The frame cannot reach the host itself (opaque origin), so it posts to
+     * this window. Only a message carrying the marker is forwarded, and the
+     * host re-checks that the path belongs to its own store.
+     */
+    function relayState() {
+      if (typeof window === 'undefined') return
+      window.addEventListener('message', event => {
+        const data = event.data
+        if (data === null || typeof data !== 'object' || typeof data.dshVizState !== 'string') return
+        if (data.dshVizState === '') return
+        const url = new URL('api/visualize/state', document.baseURI)
+        void fetch(url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ path: data.dshVizState, state: data.state ?? null }),
+        }).catch(() => {})
+      })
+    }
+
     return {
       inject: ['slots'],
       apply(ctx) {
+        relayState()
         ctx.slots.inject('tool.call.toolview', () => ctx.slots.register({
           name: 'tool.call.toolview',
           key: 'visualize',

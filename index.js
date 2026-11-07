@@ -11,7 +11,7 @@
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, isAbsolute, join, sep } from 'node:path'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { assertHtml, assertMode, assertTitle, DEFAULT_DIR, destination, MODES } from './lib/validate.js'
 
@@ -19,7 +19,7 @@ import { assertHtml, assertMode, assertTitle, DEFAULT_DIR, destination, MODES } 
 export const name = 'dsh-visualize'
 
 /** Services this plugin needs. */
-export const inject = ['tools']
+export const inject = ['tools', 'connection']
 
 /**
  * The directory one Session owns: the store root, then the Session id, so a
@@ -81,6 +81,66 @@ async function writeAsset(dir, asset) {
  * @param ctx - context carrying the tool registry.
  */
 export function apply(ctx) {
+  // The frame has an opaque origin, so it posts its interaction state to the
+  // parent page, which relays it here. One route keeps the browser half free of
+  // a generated Remote.
+  ctx.connection.fetch.register({
+    path: '/api/visualize/state',
+    methods: ['POST'],
+    requestBody: 'buffered',
+    fetch: async (request) => {
+      const body = JSON.parse(new TextDecoder().decode(request.body ?? new Uint8Array()))
+      const target = String(body.path ?? '')
+      const root = join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), DEFAULT_DIR)
+      // Only a file this plugin owns may be written beside.
+      if (!isAbsolute(target) || !target.startsWith(root + sep)) {
+        return new Response('unknown visualization', { status: 400 })
+      }
+      const statePath = join(dirname(target), 'state', `${basename(target, '.html')}.json`)
+      await mkdir(dirname(statePath), { recursive: true })
+      await writeFile(statePath, JSON.stringify(body.state ?? null), 'utf8')
+      return new Response('ok', { status: 200 })
+    },
+  })
+
+  ctx.tools.register(defineTool({
+    name: 'visualize_state',
+    description: 'Read the interaction state a visualization reported. '
+      + 'A visualization calls viz.state({...}) when the reader changes something, and this returns the last snapshot '
+      + 'for one title in this Session. Use it when the reader says they picked, filtered, or selected something on a visual. '
+      + 'Returns null when nothing was reported.',
+    parameters: {
+      title: {
+        type: 'string',
+        required: true,
+        description: 'The title the visualization was drawn with.',
+      },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          title: { type: 'string', required: true },
+          state: { type: 'string', required: true, description: 'JSON text, or "null".' },
+        },
+      },
+      render: (_args, value) => [{ type: 'text', text: value.state }],
+    },
+    async execute(args, exec) {
+      const title = assertTitle(args.title)
+      const store = storeDir(String(exec.agent.session.id))
+      const statePath = join(store, 'state', `${title}.json`)
+      let state = 'null'
+      try {
+        state = await readFile(statePath, 'utf8')
+      } catch {
+        // Nothing reported yet.
+      }
+      return { title, state }
+    },
+  }))
+
   ctx.tools.register(defineTool({
     name: 'visualize',
     description: 'Show an interactive HTML visualization inline in the conversation. '
