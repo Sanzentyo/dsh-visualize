@@ -429,31 +429,82 @@ svg { display: block; max-width: 100%; height: auto; }
     }
 
     /**
-     * Relay a visualization's interaction state to the host.
+     * The Session a visualization belongs to.
+     *
+     * The store is `<home>/visualize/<sessionId>/<title>.html`, so the path the
+     * frame reports already names its Session. That is more reliable than
+     * asking which tab is in front.
+     * @param path - absolute visualization path.
+     * @returns the Session id, or undefined when the path is not one of ours.
+     */
+    function sessionOf(path) {
+      const parts = String(path).split(/[\\/]/)
+      const at = parts.lastIndexOf('visualize')
+      return at >= 0 && parts.length > at + 2 ? parts[at + 1] : undefined
+    }
+
+    /**
+     * The visualization's title, which is its file name without the extension.
+     * @param path - absolute visualization path.
+     * @returns the title, or undefined when the path names no html file.
+     */
+    function titleOf(path) {
+      const match = /([^\\/]+)\.html$/.exec(String(path))
+      return match === null ? undefined : match[1]
+    }
+
+    /**
+     * Relay what a visualization reports to the host.
      *
      * The frame cannot reach the host itself (opaque origin), so it posts to
-     * this window. Only a message carrying the marker is forwarded, and the
-     * host re-checks that the path belongs to its own store.
+     * this window. Only a message carrying a marker is forwarded, and the host
+     * re-checks that the path belongs to its own store.
+     * @param ctx - owning client context.
      */
-    function relayState() {
+    function relayState(ctx) {
       if (typeof window === 'undefined') return
       window.addEventListener('message', event => {
         const data = event.data
-        if (data === null || typeof data !== 'object' || typeof data.dshVizState !== 'string') return
-        if (data.dshVizState === '') return
-        const url = new URL('api/visualize/state', document.baseURI)
-        void fetch(url, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ path: data.dshVizState, state: data.state ?? null }),
-        }).catch(() => {})
+        if (data === null || typeof data !== 'object') return
+
+        if (typeof data.dshVizState === 'string' && data.dshVizState !== '') {
+          const session = typeof data.dshVizSession === 'string' ? data.dshVizSession : ''
+          const title = titleOf(data.dshVizState)
+          if (session === '' || title === undefined) return
+          const url = new URL('api/visualize/state', document.baseURI)
+          void fetch(url, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ session, title, state: data.state ?? null }),
+          }).catch(() => {})
+          return
+        }
+
+        // A drill-down: the reader asked for the selected values to be
+        // investigated, so start a turn in the visualization's own Session.
+        if (typeof data.dshVizFollowUp === 'string' && data.dshVizFollowUp !== '') {
+          const prompt = typeof data.prompt === 'string' ? data.prompt.trim() : ''
+          if (prompt === '') return
+          ctx.inject(['sessions', 'conversation'], scope => {
+            // The Session being read, which is the fork's own id when the
+            // transcript came from a fork. Falling back to the path would send
+            // the prompt to the Session that first drew the visualization.
+            const id = typeof data.dshVizSession === 'string' && data.dshVizSession !== ''
+              ? data.dshVizSession
+              : sessionOf(data.dshVizFollowUp)
+            if (id === undefined) return
+            const session = scope.sessions.binding(id)?.session
+            if (session === undefined) return
+            void scope.conversation.sendSession(session, prompt, [], 'queue').catch(() => {})
+          })
+        }
       })
     }
 
     return {
       inject: ['slots'],
       apply(ctx) {
-        relayState()
+        relayState(ctx)
         ctx.slots.inject('tool.call.toolview', () => ctx.slots.register({
           name: 'tool.call.toolview',
           key: 'visualize',

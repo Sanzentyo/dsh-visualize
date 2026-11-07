@@ -89,15 +89,17 @@ export function apply(ctx) {
     methods: ['GET', 'POST'],
     requestBody: 'buffered',
     fetch: async (request) => {
+      // State is keyed by the Session being read, not by the file: a fork reads
+      // the same visualization but must keep its own choices.
       const root = join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), DEFAULT_DIR)
-      const statePathOf = (target) => {
-        // Only a file this plugin owns may be read or written beside.
-        if (!isAbsolute(target) || !target.startsWith(root + sep)) return undefined
-        return join(dirname(target), 'state', `${basename(target, '.html')}.json`)
+      const statePathOf = (session, title) => {
+        if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(session)) return undefined
+        if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(title)) return undefined
+        return join(root, session, 'state', `${title}.json`)
       }
       if (request.method === 'GET') {
-        const target = new URL(request.url).searchParams.get('path') ?? ''
-        const statePath = statePathOf(target)
+        const params = new URL(request.url).searchParams
+        const statePath = statePathOf(params.get('session') ?? '', params.get('title') ?? '')
         if (statePath === undefined) return new Response('unknown visualization', { status: 400 })
         try {
           return new Response(await readFile(statePath, 'utf8'), {
@@ -110,7 +112,7 @@ export function apply(ctx) {
         }
       }
       const body = JSON.parse(new TextDecoder().decode(request.body ?? new Uint8Array()))
-      const statePath = statePathOf(String(body.path ?? ''))
+      const statePath = statePathOf(String(body.session ?? ''), String(body.title ?? ''))
       if (statePath === undefined) return new Response('unknown visualization', { status: 400 })
       await mkdir(dirname(statePath), { recursive: true })
       await writeFile(statePath, JSON.stringify(body.state ?? null), 'utf8')
