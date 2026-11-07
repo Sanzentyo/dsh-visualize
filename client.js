@@ -314,11 +314,14 @@ window.__ModuleLoader__.load({
       }
 
       const wide = payload.mode === 'wide'
+      const card = payload.card === true
       const source = html === undefined
         ? undefined
         : `<!doctype html><html><head><meta charset="utf-8">`
           + `<meta name="viewport" content="width=device-width, initial-scale=1">`
-          + `<style>${themeCss()}</style><style>${primitives.VISUALIZE_CSS}</style></head><body>`
+          + `<style>${themeCss()}</style><style>${primitives.VISUALIZE_CSS}</style>`
+          + (card ? `<style>${primitives.VISUALIZE_CARD_CSS}</style>` : '')
+          + '</head><body>'
           + `<script>window.__dshVizPath=${JSON.stringify(payload.path)}</script>`
           + `<script>window.__dshVizSession=${JSON.stringify(sessionOf(payload.path) ?? '')}</script>`
           + `<script>window.__dshVizState=${JSON.stringify(restored ?? null)}</script>`
@@ -366,6 +369,7 @@ window.__ModuleLoader__.load({
         }, 'open'),
       ])
 
+      const divider = card ? '1px solid var(--dsw-alias-border-l1)' : '0'
       let body
       if (failure !== undefined) {
         body = h('div', {
@@ -374,7 +378,7 @@ window.__ModuleLoader__.load({
             padding: '12px 14px',
             fontSize: '12px',
             color: 'var(--dsw-alias-state-error-primary)',
-            borderTop: '1px solid var(--dsw-alias-border-l1)',
+            borderTop: divider,
           },
         }, `visualization unavailable: ${failure}`)
       } else if (source === undefined) {
@@ -384,7 +388,7 @@ window.__ModuleLoader__.load({
             padding: '12px 14px',
             fontSize: '12px',
             color: 'var(--dsw-alias-label-primary-dimmed)',
-            borderTop: '1px solid var(--dsw-alias-border-l1)',
+            borderTop: divider,
           },
         }, 'loading…')
       } else {
@@ -400,10 +404,22 @@ window.__ModuleLoader__.load({
             border: '0',
             display: 'block',
             background: 'transparent',
-            borderTop: '1px solid var(--dsw-alias-border-l1)',
+            borderTop: divider,
             transition: 'height .12s ease',
           },
         })
+      }
+
+      if (!card) {
+        // 既定は本文に溶け込む。枠も見出しも付けず、呼び出し位置に可視化だけを置く。
+        return h('div', {
+          'data-dsh-visualize': payload.title,
+          style: {
+            margin: '10px 0',
+            maxWidth: wide ? '100%' : '780px',
+            color: 'var(--dsw-alias-label-primary)',
+          },
+        }, body)
       }
 
       return h('div', {

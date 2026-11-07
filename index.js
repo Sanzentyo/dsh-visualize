@@ -197,6 +197,11 @@ export function apply(ctx) {
         description: 'Wide for request waterfalls, stack traces, flame charts, month calendars, desktop mockups, '
           + 'or several panels side by side. Regular for a single plot, map, diagram, timeline, dialog or phone screen.',
       },
+      card: {
+        type: 'boolean',
+        description: 'Draw a card frame (border, background, title header). Default false: the visual melts into '
+          + 'the message text like a code block does. Use card only when the visual needs separation from the text.',
+      },
       path: {
         type: 'string',
         description: 'Destination file. Defaults to the Session store, keyed by the title.',
@@ -223,6 +228,7 @@ export function apply(ctx) {
           path: { type: 'string', required: true },
           title: { type: 'string', required: true },
           mode: { type: 'string', required: true },
+          card: { type: 'boolean', required: true },
           bytes: { type: 'integer', required: true },
           assets: { type: 'array', items: { type: 'string' } },
         },
@@ -233,6 +239,7 @@ export function apply(ctx) {
       const title = assertTitle(args.title)
       const html = assertHtml(args.html)
       const mode = assertMode(args.mode)
+      const card = args.card === true
       // One store per Session, so a thread's visualizations stay together and no
       // workspace accumulates its own artifact directory. `api/file` needs the
       // absolute path this returns.
@@ -252,7 +259,7 @@ export function apply(ctx) {
         assets.push(await writeAsset(join(store, 'assets'), asset))
       }
 
-      return { path: target, title, mode, bytes: Buffer.byteLength(html, 'utf8'), assets }
+      return { path: target, title, mode, card, bytes: Buffer.byteLength(html, 'utf8'), assets }
     },
   }))
 
@@ -306,6 +313,11 @@ export function apply(ctx) {
         enum: MODES,
         description: 'Width mode of the card. Defaults to regular.',
       },
+      card: {
+        type: 'boolean',
+        description: 'Draw a card frame (border, background, title header). Default false: the visual melts into '
+          + 'the message text like a code block does.',
+      },
     },
     output: {
       schema: {
@@ -315,6 +327,7 @@ export function apply(ctx) {
           path: { type: 'string', required: true },
           title: { type: 'string', required: true },
           mode: { type: 'string', required: true },
+          card: { type: 'boolean', required: true },
           bytes: { type: 'integer', required: true },
           rows: { type: 'integer', required: true, description: 'Aggregated group count.' },
           groups: {
@@ -337,6 +350,7 @@ export function apply(ctx) {
     async execute(args, exec) {
       const title = assertTitle(args.title)
       const mode = assertMode(args.mode)
+      const card = args.card === true
       let csvStat
       try {
         csvStat = await stat(args.csv_path)
@@ -366,6 +380,7 @@ export function apply(ctx) {
         path: target,
         title,
         mode,
+        card,
         bytes: Buffer.byteLength(html, 'utf8'),
         sourceRows: rowCount,
         groups: data.length,
