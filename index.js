@@ -9,16 +9,54 @@
  * kilobytes and the result would sit in every later request, so the tool
  * returns a path and the client reads the bytes through `/api/file`.
  */
-import { mkdir, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { assertHtml, assertMode, assertTitle, destination, MODES } from './lib/validate.js'
+import { assertHtml, assertMode, assertTitle, DEFAULT_DIR, destination, MODES } from './lib/validate.js'
 
 /** Stable Loader identity. */
 export const name = 'dsh-visualize'
 
 /** Services this plugin needs. */
-export const inject = ['tools', 'workingDirectory']
+export const inject = ['tools']
+
+/** Visualizations older than this are pruned on the next write. */
+const RETENTION_MS = 7 * 24 * 60 * 60 * 1000
+
+/**
+ * The one directory every visualization lands in.
+ * @returns an absolute path under the Harness home.
+ */
+function storeDir() {
+  const home = process.env.DSH_HOME ?? join(homedir(), '.dsh')
+  return join(home, DEFAULT_DIR)
+}
+
+/**
+ * Delete stale visualizations so the store does not grow without bound.
+ * Best effort: a file that cannot be removed is left for the next write.
+ * @param store - the store directory.
+ */
+async function prune(store) {
+  let names
+  try {
+    names = await readdir(store)
+  } catch {
+    return
+  }
+  const cutoff = Date.now() - RETENTION_MS
+  for (const entry of names) {
+    if (!entry.endsWith('.html')) continue
+    const path = join(store, entry)
+    try {
+      const info = await stat(path)
+      if (info.mtimeMs < cutoff) await rm(path, { force: true })
+    } catch {
+      // A concurrent prune or a locked file: leave it.
+    }
+  }
+}
 
 /**
  * Register the `visualize` tool.
@@ -78,18 +116,18 @@ export function apply(ctx) {
       },
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
     },
-    async execute(args, exec) {
+    async execute(args) {
       const title = assertTitle(args.title)
       const html = assertHtml(args.html)
       const mode = assertMode(args.mode)
-      // The Session's working directory, not the server process's: a
-      // visualization belongs beside the work it describes, and `api/file`
-      // serves paths relative to the same root.
-      const cwd = await ctx.workingDirectory.ensure(exec.agent, exec.signal)
-      const target = destination(cwd, title, args.path)
+      // One store for every workspace, so a project never accumulates its own
+      // artifact directory. `api/file` needs the absolute path this returns.
+      const store = storeDir()
+      const target = destination(store, title, args.path)
 
       await mkdir(dirname(target), { recursive: true })
       await writeFile(target, html, 'utf8')
+      await prune(store)
 
       return { path: target, title, mode, bytes: Buffer.byteLength(html, 'utf8') }
     },

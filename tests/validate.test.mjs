@@ -62,20 +62,20 @@ describe('assertMode', () => {
 })
 
 describe('destination', () => {
-  it('defaults under the working directory', () => {
-    assert.equal(destination('/work', 'chart', undefined), resolve('/work', '.dsh-visualize', 'chart.html'))
+  it('defaults into the store directory', () => {
+    assert.equal(destination('/home/.dsh/visualize', 'chart', undefined), resolve('/home/.dsh/visualize', 'chart.html'))
   })
 
-  it('resolves a relative path against the working directory', () => {
-    assert.equal(destination('/work', 'chart', 'out/a.html'), resolve('/work', 'out/a.html'))
+  it('resolves a relative path against the store', () => {
+    assert.equal(destination('/home/.dsh/visualize', 'chart', 'out/a.html'), resolve('/home/.dsh/visualize', 'out/a.html'))
   })
 
   it('keeps an absolute path', () => {
     const absolute = resolve('/elsewhere/b.html')
-    assert.equal(destination('/work', 'chart', absolute), absolute)
+    assert.equal(destination('/home/.dsh/visualize', 'chart', absolute), absolute)
   })
 
-  it('falls back to the default for a blank path', () => {
-    assert.equal(destination('/work', 'chart', '   '), resolve('/work', '.dsh-visualize', 'chart.html'))
+  it('falls back to the store for a blank path', () => {
+    assert.equal(destination('/home/.dsh/visualize', 'chart', '   '), resolve('/home/.dsh/visualize', 'chart.html'))
   })
 })
