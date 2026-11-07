@@ -250,7 +250,7 @@ viz.bind(ctl, function (v) { return { …config, … } }, chart)
 （`vz-animate` クラスが 1 フレーム後に付くため）。`prefers-reduced-motion: reduce` では
 transition 自体が無効になる。
 
-### 状態の報告
+### 状態の報告と復元
 
 読者が選んだ内容をモデルに伝えられる。
 
@@ -262,7 +262,45 @@ viz.state({ sort: 'desc', hidden: ['target'], threshold: 0.9 })
 プラグインのブラウザ側が `/api/visualize/state` へ中継、ホストが
 `<sessionId>/state/<title>.json` に保存する。モデルは `visualize_state` ツールで読む。
 
-**復元は未実装。** 保存はするが、再描画時に読み戻す経路はない。
+**再描画時は読み戻される。** `VisualizeFrame` が srcDoc を組む前に
+`GET /api/visualize/state?session=&title=` を投げ、結果を `window.__dshVizState` として
+注入する。断片は `viz.restore()` で同期的に取れる。
+
+```js
+var saved = viz.restore() || {}
+var threshold = saved.threshold ?? 0.9
+```
+
+**`null` は正常系。** まだ何も報告されていなければ、断片は自分の既定値から始める。
+
+### セッション — fork との関係
+
+**状態は `(sessionId, title)` で分かれる。** ファイルパスではなく、**読んでいるセッション**が
+キーになる。
+
+セッションを複製するとトランスクリプトがコピーされるが、フェンスの絶対パスは元のまま
+残る。だから複製先でも同じ図が見える。しかし状態まで元と共有すると、複製先での操作が
+**元セッションの状態を上書きする**。それを避けるためにセッション id を分けている。
+
+断片から現在のセッションを知りたいときは `viz.session()`。
+
+### フォローアップ要求
+
+読者の操作から次のターンを起こせる。
+
+```js
+viz.followUp({
+  prompt: '選択した 300K+ のバケットを詳しく調べて',
+  title: 'この範囲を調べる'
+})
+```
+
+`prompt` がそのままモデルへのメッセージになる。**選択した値と、何を調べるかを書く。**
+フレームは `postMessage` し、プラグインが `conversation.sendSession(...)` で通常の
+プロンプトとして送る。読者には新しいターンとして見える。
+
+**送信先は `viz.session()` のセッション。** パスから推測すると、fork で元セッションに
+飛ぶ。
 
 ## 断片の規約
 
