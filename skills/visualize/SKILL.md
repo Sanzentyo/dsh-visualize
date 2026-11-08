@@ -437,11 +437,47 @@ DSH は `--dsw-alias-*` という独自のトークンを持ち、ダーク/ラ�
 
 迷ったら `regular`。縦に積めば済むものを横に並べない。
 
-## モバイル
+## モバイル・タッチ
 
 iframe の幅は会話幅に追従する。固定 px 幅を書かず、`%` か `flex` で組む。
-`regular` は最大 780px、`wide` は 100% なので、`regular` のままでも
-スマホでは画面幅に収まる。タッチ操作を想定し、ホバーだけに情報を持たせない。
+タッチ操作を想定し、ホバーだけに情報を持たせない:
+
+- **ハンバーガーメニューはタッチでは常時表示**(ホバーが無いのでホバーゲートを外す)。
+  メニュー項目は 44px 以上のタップ領域。外側タップで閉じる
+- **ツールチップはタップでトグル**(ホバーの代替)
+- **`data-editable` 要素には `touch-action: manipulation`** を付ける
+  (ダブルタップズームがダブルクリック編集を吸わない)
+
+## フレームメニュー(ハンバーガー)
+
+**既定 ON** — 折りたたまれたハンバーガーが右上に常時出る。断片に `data-viz-controls="off"`
+を付けると消え、`data-viz-controls-position` で四隅へ移動できる。
+メニュー: 表示切替(グラフ/表)、コピー(CSV/TSV/Markdown)、ダウンロード
+(text/html/md/svg)、拡大率(50-200%)、色の上書き(この表示限定)、スクロール切替。
+選択状態は `viz.state` で保持され、再描画で復元される。コピーとダウンロードは
+サンドボックス iframe から直接行えないため、親へ `postMessage` で委譲される。
+
+## 数式(LaTeX)
+
+断片はサンドボックス付き iframe(不透明オリジン)なので、**外部 CDN は読めない**。
+KaTeX は `assets` で同梱し、`window.__dshVizPath` から `/api/file` の絶対 URL を
+組み立てて読み込む(クラシックな `<script src>` は CORS の対象外なので読める):
+
+```html
+<script>
+var store = window.__dshVizPath.replace(/[^/\\]+$/, '');
+var css = document.createElement('link');
+css.rel = 'stylesheet';
+css.href = '/api/file?path=' + encodeURIComponent(store + 'assets/katex.min.css');
+document.head.appendChild(css);
+var s = document.createElement('script');
+s.src = '/api/file?path=' + encodeURIComponent(store + 'assets/katex.min.js');
+s.onload = function () { /* katex.render を各要素に */ };
+document.head.appendChild(s);
+</script>
+```
+
+`assets` 引数に `katex.min.js` / `katex.min.css` を base64 で渡すのを忘れない。
 
 ## 応答の書き方
 

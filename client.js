@@ -34,7 +34,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@bb6053ee67 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@7d39775d25 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -157,7 +157,53 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
   background: var(--vz-surface); color: var(--vz-text);
   border: 1px solid var(--vz-border); font-size: .86em; line-height: 1.4;
   box-shadow: 0 4px 14px rgb(0 0 0 / .18);
-}`
+}
+
+/* ── frame menu (the runtime creates these) ───────────────────────────── */
+/* 既定 ON: 折りたたまれたハンバーガー。ホバーのある環境では薄く常在して
+   ホバーで濃くなる。タッチ(pointer: coarse)ではホバーが無いので常に濃く、
+   44px のタップ領域を保つ。data-viz-controls-position で四隅へ移動できる。 */
+.vz-menu-btn {
+  position: fixed; z-index: 2147483646;
+  width: 32px; height: 32px; min-width: 44px; min-height: 44px;
+  border-radius: 8px; border: 1px solid var(--vz-border);
+  background: var(--vz-surface); color: var(--vz-dim);
+  font-size: 16px; line-height: 1; cursor: pointer;
+  opacity: .55; transition: opacity .12s ease, background .12s ease;
+  padding: 0;
+}
+@media (hover: hover) {
+  .vz-menu-btn:hover { opacity: 1; background: var(--vz-surface); }
+}
+@media (hover: none) {
+  .vz-menu-btn { opacity: .8; }
+}
+.vz-menu-top-right { top: 6px; right: 6px; }
+.vz-menu-top-left { top: 6px; left: 6px; }
+.vz-menu-bottom-right { bottom: 6px; right: 6px; }
+.vz-menu-bottom-left { bottom: 6px; left: 6px; }
+.vz-menu-panel {
+  position: fixed; z-index: 2147483647;
+  min-width: 240px; max-width: 300px; max-height: 70vh; overflow-y: auto;
+  padding: 10px 12px; border-radius: 10px;
+  background: var(--vz-surface); color: var(--vz-text);
+  border: 1px solid var(--vz-border);
+  box-shadow: 0 8px 24px rgb(0 0 0 / .25);
+  font-size: 13px;
+}
+.vz-menu-top-right { top: 52px; right: 6px; }
+.vz-menu-top-left { top: 52px; left: 6px; }
+.vz-menu-bottom-right { bottom: 52px; right: 6px; }
+.vz-menu-bottom-left { bottom: 52px; left: 6px; }
+.vz-menu-h {
+  font-size: .82em; color: var(--vz-dim); font-weight: 500;
+  margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .04em;
+}
+.vz-menu-panel > .vz-menu-h:first-child { margin-top: 0; }
+.vz-menu-row { display: flex; align-items: center; gap: 6px; margin: 4px 0; flex-wrap: wrap; }
+.vz-menu-label { flex: 1 1 auto; color: var(--vz-dim); font-size: .92em; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.vz-menu-check { display: flex; align-items: center; gap: 6px; font-size: .92em; cursor: pointer; }
+.vz-menu-panel .btn { min-height: 32px; padding: 4px 10px; font-size: .9em; }`
     const FRAME_RUNTIME = `
 (function () {
   var tip = null;
@@ -232,12 +278,14 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
   // 既定はスクロールなし。内容がフレームより横に広いとき、全体が見えるように
   // 縮小(zoom)する。window.__dshVizScroll が 'x' | 'y' | 'both' のときはその軸の
   // スクロールを許して縮小しない(横長の表や縦長のログなど、意図的な長さの明示指定)。
+  // data-viz-zoom は読者の拡大率(メニューのスライダー)で、フィット縮小に乗算される。
   function fit() {
     var root = document.documentElement;
     var scroll = window.__dshVizScroll || 'none';
+    var userZoom = Number(root.getAttribute('data-viz-zoom')) || 1;
     if (scroll === 'x' || scroll === 'both') root.style.overflowX = 'auto';
     if (scroll === 'y' || scroll === 'both') root.style.overflowY = 'auto';
-    if (scroll !== 'none') { root.style.zoom = ''; return; }
+    if (scroll !== 'none') { document.body.style.zoom = String(userZoom); return; }
     root.style.overflow = 'hidden';
     var zoom = 1;
     for (var pass = 0; pass < 3; pass++) {
@@ -246,8 +294,9 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
       if (wide <= avail + 1) break;
       zoom = zoom * (avail / wide);
       if (zoom < 0.05) zoom = 0.05;
-      document.body.style.zoom = String(zoom);
+      document.body.style.zoom = String(zoom * userZoom);
     }
+    if (zoom === 1 && userZoom !== 1) document.body.style.zoom = String(userZoom);
   }
   // The fragment's scripts run during parse, so the content exists by
   // DOMContentLoaded; fonts and images may still shift the layout, so the
@@ -255,6 +304,321 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
   document.addEventListener('DOMContentLoaded', fit);
   addEventListener('load', fit);
   setTimeout(fit, 150);
+
+  // ── frame menu ──
+  // 既定 ON: 折りたたまれたハンバーガーが右上に出る。html 要素の
+  // data-viz-controls="off" で消え、data-viz-controls-position で位置が変わる。
+  // メニュー: 表示切替(グラフ/表)、コピー(CSV/TSV/Markdown)、ダウンロード、
+  // 拡大率、色、スクロール。選択は viz.state で保持され、再描画で復元される。
+  // タッチではホバーが無いので常時表示、メニュー項目は 44px 以上のタップ領域。
+  (function menu() {
+    var root = document.documentElement;
+    if (root.getAttribute('data-viz-controls') === 'off') return;
+    var pos = root.getAttribute('data-viz-controls-position') || 'top-right';
+    var coarse = false;
+    try { coarse = matchMedia('(pointer: coarse)').matches; } catch (e) { /* no matchMedia */ }
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'vz-menu-btn vz-menu-' + pos;
+    btn.setAttribute('aria-label', '表示メニュー');
+    btn.textContent = '⋯';
+
+    var panel = document.createElement('div');
+    panel.className = 'vz-menu-panel vz-menu-' + pos;
+    panel.hidden = true;
+
+    function section(title) {
+      var h = document.createElement('div');
+      h.className = 'vz-menu-h';
+      h.textContent = title;
+      panel.appendChild(h);
+    }
+    function row() {
+      var r = document.createElement('div');
+      r.className = 'vz-menu-row';
+      panel.appendChild(r);
+      return r;
+    }
+    function button(label, fn) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn';
+      b.textContent = label;
+      b.addEventListener('click', fn);
+      return b;
+    }
+    function charts() { return (window.viz && window.viz._charts) || []; }
+
+    // ── 表示切替: グラフ / 表 ──
+    var tableMode = false;
+    function renderCharts() {
+      charts().forEach(function (c) {
+        if (tableMode) renderTable(c);
+        else { c.host.textContent = ''; c.update(c.config); }
+      });
+    }
+    function renderTable(c) {
+      var config = c.config || {};
+      var cols = config.columns || [];
+      var rows = config.rows || [];
+      var host = c.host;
+      host.textContent = '';
+      var table = document.createElement('table');
+      table.className = 'table table-sm';
+      var thead = document.createElement('thead');
+      var trh = document.createElement('tr');
+      cols.forEach(function (name) {
+        var th = document.createElement('th');
+        th.textContent = String(name);
+        trh.appendChild(th);
+      });
+      thead.appendChild(trh);
+      table.appendChild(thead);
+      var tbody = document.createElement('tbody');
+      rows.forEach(function (r) {
+        var tr = document.createElement('tr');
+        cols.forEach(function (_, i) {
+          var td = document.createElement('td');
+          td.textContent = String(r[i]);
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      host.appendChild(table);
+    }
+    function tabular(config, sep) {
+      var cols = config.columns || [];
+      var rows = config.rows || [];
+      var cell = function (v) {
+        var s = String(v);
+        return sep === ',' && s.indexOf(',') >= 0 ? '"' + s + '"' : s;
+      };
+      return [cols.map(cell).join(sep)].concat(rows.map(function (r) {
+        return cols.map(function (_, i) { return cell(r[i]); }).join(sep);
+      })).join('\n');
+    }
+    function toMarkdown(config) {
+      var cols = config.columns || [];
+      var rows = config.rows || [];
+      var head = '| ' + cols.join(' | ') + ' |';
+      var rule = '|' + cols.map(function () { return ' --- '; }).join('|') + '|';
+      var body = rows.map(function (r) {
+        return '| ' + cols.map(function (_, i) { return String(r[i]); }).join(' | ') + ' |';
+      }).join('\n');
+      return head + '\n' + rule + '\n' + body;
+    }
+
+    // ── 状態の保持と復元 ──
+    var saved = (window.viz && window.viz.restore) ? (window.viz.restore() || {}) : {};
+    var edits = saved.edits || {};
+
+    function report() {
+      if (!window.viz || !window.viz.state) return;
+      window.viz.state({
+        tableMode: tableMode,
+        zoom: Number(root.getAttribute('data-viz-zoom')) || 1,
+        colors: {
+          text: root.style.getPropertyValue('--vz-text') || undefined,
+          surface: root.style.getPropertyValue('--vz-surface') || undefined,
+          accent: root.style.getPropertyValue('--vz-accent') || undefined,
+        },
+        scroll: window.__dshVizScroll || 'none',
+        edits: edits,
+      });
+    }
+
+    function build() {
+      panel.textContent = '';
+      if (charts().length > 0) {
+        section('表示');
+        var viewRow = row();
+        var chartBtn = button(tableMode ? 'グラフ' : 'グラフ ✓', function () {
+          tableMode = false;
+          renderCharts();
+          build();
+          report();
+        });
+        var tableBtn = button(tableMode ? '表 ✓' : '表', function () {
+          tableMode = true;
+          renderCharts();
+          build();
+          report();
+        });
+        viewRow.appendChild(chartBtn);
+        viewRow.appendChild(tableBtn);
+
+        if (!tableMode) {
+          section('コピー(グラフのデータ)');
+          charts().forEach(function (c, i) {
+            var cr = row();
+            var label = c.config && c.config.title ? c.config.title : 'グラフ ' + (i + 1);
+            var name = document.createElement('span');
+            name.className = 'vz-menu-label';
+            name.textContent = label;
+            cr.appendChild(name);
+            cr.appendChild(button('CSV', function () {
+              parent.postMessage({ dshVizCopy: tabular(c.config, ',') }, '*');
+            }));
+            cr.appendChild(button('TSV', function () {
+              parent.postMessage({ dshVizCopy: tabular(c.config, '\t') }, '*');
+            }));
+            cr.appendChild(button('Markdown', function () {
+              parent.postMessage({ dshVizCopy: toMarkdown(c.config) }, '*');
+            }));
+          });
+        }
+      }
+
+      section('ダウンロード');
+      var dlRow = row();
+      var includeCharts = document.createElement('label');
+      includeCharts.className = 'vz-menu-check';
+      var includeChartsInput = document.createElement('input');
+      includeChartsInput.type = 'checkbox';
+      includeChartsInput.checked = true;
+      includeCharts.appendChild(includeChartsInput);
+      includeCharts.appendChild(document.createTextNode('グラフを含む'));
+      dlRow.appendChild(includeCharts);
+      var dlButtons = row();
+      function download(name, mime, text) {
+        var url = 'data:' + mime + ';charset=utf-8,' + encodeURIComponent(text);
+        parent.postMessage({ dshVizDownload: { name: name, url: url } }, '*');
+      }
+      function frameText() {
+        return document.body.innerText;
+      }
+      function frameHtml() {
+        return '<!doctype html>\n' + document.documentElement.outerHTML;
+      }
+      function frameMarkdown() {
+        var out = [frameText()];
+        charts().forEach(function (c, i) {
+          if (!includeChartsInput.checked) return;
+          out.push('', '## ' + ((c.config && c.config.title) || 'グラフ ' + (i + 1)), '', toMarkdown(c.config), '');
+        });
+        return out.join('\n');
+      }
+      function framePng() {
+        var svg = document.querySelector('svg');
+        if (!svg) return undefined;
+        var xml = new XMLSerializer().serializeToString(svg);
+        return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml);
+      }
+      dlButtons.appendChild(button('text', function () {
+        download('visualization.txt', 'text/plain', frameText());
+      }));
+      dlButtons.appendChild(button('html', function () {
+        download('visualization.html', 'text/html', frameHtml());
+      }));
+      dlButtons.appendChild(button('md', function () {
+        download('visualization.md', 'text/markdown', frameMarkdown());
+      }));
+      dlButtons.appendChild(button('svg', function () {
+        var url = framePng();
+        if (url !== undefined) download('chart.svg', 'image/svg+xml', decodeURIComponent(url.split(',')[1]));
+      }));
+
+      section('拡大率');
+      var zoomRow = row();
+      var zoom = document.createElement('input');
+      zoom.type = 'range';
+      zoom.min = '50';
+      zoom.max = '200';
+      zoom.step = '5';
+      zoom.value = String(Math.round((Number(root.getAttribute('data-viz-zoom')) || 1) * 100));
+      zoom.style.flex = '1';
+      var zoomLabel = document.createElement('span');
+      zoomLabel.className = 'vz-menu-label';
+      zoomLabel.textContent = zoom.value + '%';
+      zoom.addEventListener('input', function () {
+        root.setAttribute('data-viz-zoom', String(Number(zoom.value) / 100));
+        zoomLabel.textContent = zoom.value + '%';
+        if (typeof fit === 'function') fit();
+      });
+      zoomRow.appendChild(zoom);
+      zoomRow.appendChild(zoomLabel);
+
+      section('色の上書き(この表示限定)');
+      [['text', '--vz-text'], ['surface', '--vz-surface'], ['accent', '--vz-accent']].forEach(function (pair) {
+        var cr = row();
+        var label = document.createElement('span');
+        label.className = 'vz-menu-label';
+        label.textContent = pair[0];
+        var input = document.createElement('input');
+        input.type = 'color';
+        input.value = '#000000';
+        input.addEventListener('input', function () {
+          root.style.setProperty(pair[1], input.value);
+          charts().forEach(function (c) { c.update(c.config); });
+          report();
+        });
+        cr.appendChild(label);
+        cr.appendChild(input);
+      });
+
+      section('スクロール');
+      var scrollRow = row();
+      var select = document.createElement('select');
+      select.className = 'form-select';
+      ['none', 'x', 'y', 'both'].forEach(function (mode) {
+        var opt = document.createElement('option');
+        opt.value = mode;
+        opt.textContent = mode;
+        if ((window.__dshVizScroll || 'none') === mode) opt.selected = true;
+        select.appendChild(opt);
+      });
+      select.addEventListener('change', function () {
+        window.__dshVizScroll = select.value;
+        if (typeof fit === 'function') fit();
+        report();
+      });
+      scrollRow.appendChild(select);
+    }
+
+    document.body.appendChild(btn);
+    document.body.appendChild(panel);
+
+    // タッチではホバーが無い: ハンバーガーは常に見える(CSS 側で分岐)。
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      panel.hidden = !panel.hidden;
+      if (!panel.hidden) build();
+    });
+    document.addEventListener('click', function (e) {
+      if (panel.hidden) return;
+      if (panel.contains(e.target) || btn.contains(e.target)) return;
+      panel.hidden = true;
+    });
+
+    // ── ダブルクリックで要素編集(data-editable) ──
+    // 原本は保持し、上書きは edits として state に保存、表示は上書き優先。
+    document.addEventListener('dblclick', function (e) {
+      var t = e.target.closest && e.target.closest('[data-editable]');
+      if (t === null) return;
+      e.preventDefault();
+      var key = t.getAttribute('data-editable') || '';
+      t.contentEditable = 'true';
+      t.focus();
+      t.addEventListener('blur', function onBlur() {
+        t.removeEventListener('blur', onBlur);
+        t.contentEditable = 'false';
+        var text = t.textContent.trim();
+        if (text !== '') {
+          edits[key] = text;
+          report();
+        }
+      });
+    });
+    // 復元: 保存済みの上書きを適用する。
+    document.addEventListener('DOMContentLoaded', function () {
+      Object.keys(edits).forEach(function (key) {
+        var t = document.querySelector('[data-editable="' + key + '"]');
+        if (t !== null) t.textContent = edits[key];
+      });
+    });
+  })()
 })()`
     const FRAME_CHART = `
 (function () {
@@ -915,6 +1279,10 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
   window.viz.chart = function (host, config) {
     var current = config;
     var svg;
+    // The menu reads this registry: the table view, the copy and the export
+    // all work from the last config each host was drawn with.
+    var entry = { host: host, config: config };
+    (window.viz._charts = window.viz._charts || []).push(entry);
     try {
       svg = draw(host, config);
     } catch (error) {
@@ -928,48 +1296,53 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
     if (svg && !reducedMotion()) {
       requestAnimationFrame(function () { svg.classList.add('vz-animate'); });
     }
-    return {
-      update: function (next) {
-        // The animated swap is bar-only. Line/area/scatter redraw everything:
-        // their title, reference lines and axis scale change with the data, and
-        // a marks-only swap left those stale (measured: a threshold slider
-        // moved the marks but the reference line and title never followed).
-        // A keyed diff for paths and cells is not worth its weight here.
-        var sameShape = current.type === 'bar' && next.type === 'bar'
-          && (current.rows || []).length === (next.rows || []).length
-          && host.querySelector('svg') !== null;
-        if (sameShape) {
-          var before = host.querySelectorAll('[data-bar]');
-          var probe = document.createElement('div');
-          try {
-            draw(probe, next);
-          } catch (error) {
-            drawError(host, error);
-            current = next;
-            return;
-          }
-          var after = probe.querySelectorAll('[data-bar]');
-          if (before.length === after.length) {
-            var attrs = ['x', 'y', 'width', 'height', 'fill'];
-            for (var i = 0; i < before.length; i++) {
-              attrs.forEach(function (a) {
-                var v = after[i].getAttribute(a);
-                if (v !== null) before[i].setAttribute(a, v);
-              });
-              var tip = after[i].getAttribute('data-tooltip');
-              if (tip !== null) before[i].setAttribute('data-tooltip', tip);
-            }
-            current = next;
-            return;
-          }
-        }
+    function update(next) {
+      // The animated swap is bar-only. Line/area/scatter redraw everything:
+      // their title, reference lines and axis scale change with the data, and
+      // a marks-only swap left those stale (measured: a threshold slider
+      // moved the marks but the reference line and title never followed).
+      // A keyed diff for paths and cells is not worth its weight here.
+      var sameShape = current.type === 'bar' && next.type === 'bar'
+        && (current.rows || []).length === (next.rows || []).length
+        && host.querySelector('svg') !== null;
+      if (sameShape) {
+        var before = host.querySelectorAll('[data-bar]');
+        var probe = document.createElement('div');
         try {
-          draw(host, next);
+          draw(probe, next);
         } catch (error) {
           drawError(host, error);
+          current = next;
+          entry.config = next;
+          return;
         }
-        current = next;
-      },
+        var after = probe.querySelectorAll('[data-bar]');
+        if (before.length === after.length) {
+          var attrs = ['x', 'y', 'width', 'height', 'fill'];
+          for (var i = 0; i < before.length; i++) {
+            attrs.forEach(function (a) {
+              var v = after[i].getAttribute(a);
+              if (v !== null) before[i].setAttribute(a, v);
+            });
+            var tip = after[i].getAttribute('data-tooltip');
+            if (tip !== null) before[i].setAttribute('data-tooltip', tip);
+          }
+          current = next;
+          entry.config = next;
+          return;
+        }
+      }
+      try {
+        draw(host, next);
+      } catch (error) {
+        drawError(host, error);
+      }
+      current = next;
+      entry.config = next;
+    }
+    entry.update = update;
+    return {
+      update: update,
     };
   };
 
@@ -1571,6 +1944,24 @@ body { padding: 14px 16px 16px; }`
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ session, title, state: data.state ?? null }),
           }).catch(() => {})
+          return
+        }
+
+        // The frame cannot reach the clipboard or trigger a download (opaque
+        // origin, no allow-downloads), so it posts and this window acts.
+        if (typeof data.dshVizCopy === 'string' && data.dshVizCopy !== '') {
+          void navigator.clipboard?.writeText(data.dshVizCopy).catch(() => {})
+          return
+        }
+        if (data.dshVizDownload !== null && typeof data.dshVizDownload === 'object') {
+          const dl = data.dshVizDownload
+          if (typeof dl.name !== 'string' || typeof dl.url !== 'string') return
+          const a = document.createElement('a')
+          a.href = dl.url
+          a.download = dl.name
+          document.body.appendChild(a)
+          a.click()
+          a.remove()
           return
         }
 
