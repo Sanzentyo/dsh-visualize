@@ -34,7 +34,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@942b62238d (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@76a42a5132 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -178,10 +178,10 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 .vz-menu-btn.vz-menu-open { opacity: 1; pointer-events: auto; }
 .vz-menu-btn.vz-menu-touch { display: none; }
 .vz-menu-btn.vz-menu-touch.vz-menu-open { display: inline-flex; }
-.vz-menu-top-right { top: 4px; right: 4px; }
-.vz-menu-top-left { top: 4px; left: 4px; }
-.vz-menu-bottom-right { bottom: 4px; right: 4px; }
-.vz-menu-bottom-left { bottom: 4px; left: 4px; }
+.vz-menu-btn.vz-menu-top-right { top: 4px; right: 4px; }
+.vz-menu-btn.vz-menu-top-left { top: 4px; left: 4px; }
+.vz-menu-btn.vz-menu-bottom-right { bottom: 4px; right: 4px; }
+.vz-menu-btn.vz-menu-bottom-left { bottom: 4px; left: 4px; }
 .vz-menu-panel {
   position: absolute; z-index: 2147483647;
   min-width: 220px; max-width: min(300px, calc(100% - 8px)); max-height: 70vh; overflow-y: auto;
@@ -191,10 +191,10 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
   box-shadow: 0 8px 24px rgb(0 0 0 / .25);
   font-size: 13px;
 }
-.vz-menu-top-right { top: 38px; right: 4px; }
-.vz-menu-top-left { top: 38px; left: 4px; }
-.vz-menu-bottom-right { bottom: 38px; right: 4px; }
-.vz-menu-bottom-left { bottom: 38px; left: 4px; }
+.vz-menu-panel.vz-menu-top-right { top: 38px; right: 4px; }
+.vz-menu-panel.vz-menu-top-left { top: 38px; left: 4px; }
+.vz-menu-panel.vz-menu-bottom-right { bottom: 38px; right: 4px; }
+.vz-menu-panel.vz-menu-bottom-left { bottom: 38px; left: 4px; }
 .vz-menu-h {
   font-size: .82em; color: var(--vz-dim); font-weight: 500;
   margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .04em;
@@ -611,6 +611,9 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
     }
     function reveal() {
       btn.classList.add('vz-menu-open');
+      // 長押し 1 ジェスチャでメニューまで開く(ボタン出現 → タップの 2 段階を踏ませない)。
+      panel.hidden = false;
+      build();
       armHide();
     }
     if (coarse) {
