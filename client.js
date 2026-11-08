@@ -34,7 +34,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@7ba2c4ea62 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@83c60a4dce (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -160,17 +160,18 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 }
 
 /* ── frame menu (the runtime creates these) ───────────────────────────── */
-/* 常在しない。操作で出す: ホバーのある環境は**ボタン自身(右上の 30px 程度)**
-   の hover で出る(領域全体の hover ではない)。タッチは長押し(500ms)で出す。 */
+/* 常在しない。操作で出す: ホバーのある環境はボタン自身(右上の 30px 程度)の
+   hover で出る(領域全体の hover ではない)。タッチは長押し(500ms)で出す。
+   メニューの UI は内容側の上書き(--vz-* の上書き)の影響を一切受けない:
+   色はリテラルで固定し、誤設定(例: 極端な縮小)からも隔離する。 */
 .vz-menu-btn {
   position: absolute; z-index: 2147483646;
   width: 30px; height: 30px;
-  border-radius: 7px; border: 1px solid var(--vz-border);
-  background: var(--vz-surface); color: var(--vz-dim);
+  border-radius: 7px; border: 1px solid #3a3a42;
+  background: #23232a; color: #c9c9d4;
   cursor: pointer; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
-  opacity: 0; pointer-events: auto;
-  transition: opacity .12s ease;
+  opacity: 0; transition: opacity .12s ease, background .12s ease;
 }
 .vz-menu-btn:hover { opacity: 1; }
 .vz-menu-btn.vz-menu-open { opacity: 1; pointer-events: auto; }
@@ -184,8 +185,8 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
   position: absolute; z-index: 2147483647;
   min-width: 220px; max-width: min(300px, calc(100% - 8px)); max-height: 70vh; overflow-y: auto;
   padding: 10px 12px; border-radius: 10px;
-  background: var(--vz-surface); color: var(--vz-text);
-  border: 1px solid var(--vz-border);
+  background: #23232a; color: #e8e8e8;
+  border: 1px solid #3a3a42;
   box-shadow: 0 8px 24px rgb(0 0 0 / .25);
   font-size: 13px;
 }
@@ -194,19 +195,23 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 .vz-menu-panel.vz-menu-bottom-right { bottom: 38px; right: 4px; }
 .vz-menu-panel.vz-menu-bottom-left { bottom: 38px; left: 4px; }
 .vz-menu-h {
-  font-size: .82em; color: var(--vz-dim); font-weight: 500;
+  font-size: .82em; color: #9a9aa6; font-weight: 500;
   margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .04em;
 }
 .vz-menu-panel > .vz-menu-h:first-child { margin-top: 0; }
 .vz-menu-row { display: flex; align-items: center; gap: 6px; margin: 4px 0; flex-wrap: wrap; }
-.vz-menu-label { flex: 1 1 auto; color: var(--vz-dim); font-size: .92em; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.vz-menu-label { flex: 1 1 auto; color: #9a9aa6; font-size: .92em; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .vz-menu-check { display: flex; align-items: center; gap: 6px; font-size: .92em; cursor: pointer; }
-.vz-menu-panel .btn { min-height: 36px; padding: 4px 10px; font-size: .9em; }
+.vz-menu-panel .btn {
+  min-height: 36px; padding: 4px 10px; font-size: .9em;
+  background: #2c2c34; border-color: #3a3a42; color: #e8e8e8;
+}
+.vz-menu-panel .form-select { background: #2c2c34; border-color: #3a3a42; color: #e8e8e8; }
 .vz-menu-close {
   position: absolute; top: 6px; right: 6px;
   width: 28px; height: 28px; min-height: 28px; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
-  color: var(--vz-dim);
+  color: #9a9aa6;
 }`
     const FRAME_RUNTIME = `
 (function () {
@@ -289,7 +294,7 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
     var userZoom = Number(root.getAttribute('data-viz-zoom')) || 1;
     if (scroll === 'x' || scroll === 'both') root.style.overflowX = 'auto';
     if (scroll === 'y' || scroll === 'both') root.style.overflowY = 'auto';
-    if (scroll !== 'none') { document.body.style.zoom = String(userZoom); return; }
+    if (scroll !== 'none') { wrapper().style.zoom = String(userZoom); return; }
     root.style.overflow = 'hidden';
     var zoom = 1;
     for (var pass = 0; pass < 3; pass++) {
@@ -298,10 +303,33 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
       if (wide <= avail + 1) break;
       zoom = zoom * (avail / wide);
       if (zoom < 0.05) zoom = 0.05;
-      document.body.style.zoom = String(zoom * userZoom);
+      wrapper().style.zoom = String(zoom * userZoom);
     }
-    if (zoom === 1 && userZoom !== 1) document.body.style.zoom = String(userZoom);
+    if (zoom === 1 && userZoom !== 1) wrapper().style.zoom = String(userZoom);
   }
+  // 内容とメニューを分離する: 断片の全子要素を .vz-content に集め、メニューの
+  // UI(ボタン/パネル)は body 直下に残す。拡大率・色の上書きは .vz-content だけに
+  // 効き、誤設定でもメニューは壊れない(リセットで戻せる)。
+  function wrapper() {
+    var found = document.querySelector('.vz-content');
+    if (found === null) {
+      found = document.createElement('div');
+      found.className = 'vz-content';
+      document.body.appendChild(found);
+    }
+    return found;
+  }
+  document.addEventListener('DOMContentLoaded', function () {
+    var body = document.body;
+    var menuBtn = document.querySelector('.vz-menu-btn');
+    var menuPanel = document.querySelector('.vz-menu-panel');
+    var kids = Array.prototype.slice.call(body.children);
+    var target = wrapper();
+    kids.forEach(function (kid) {
+      if (kid === menuBtn || kid === menuPanel) return;
+      target.appendChild(kid);
+    });
+  });
   // The fragment's scripts run during parse, so the content exists by
   // DOMContentLoaded; fonts and images may still shift the layout, so the
   // load and a delayed pass re-measure.
@@ -578,13 +606,35 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
         input.type = 'color';
         input.value = '#000000';
         input.addEventListener('input', function () {
-          root.style.setProperty(pair[1], input.value);
+          // 上書きは内容側(.vz-content)だけに効かせる。メニュー自身の UI は
+          // リテラル色で固定なので、誤設定でもメニューは壊れない。
+          var content = document.querySelector('.vz-content');
+          if (content !== null) content.style.setProperty(pair[1], input.value);
           charts().forEach(function (c) { c.update(c.config); });
           report();
         });
         cr.appendChild(label);
         cr.appendChild(input);
       });
+
+      section('リセット');
+      var resetRow = row();
+      resetRow.appendChild(button('デフォルトに戻す', function () {
+        // 誤設定からの復帰: 拡大率・色・スクロール・表示モードを既定へ。
+        root.removeAttribute('data-viz-zoom');
+        var content = document.querySelector('.vz-content');
+        if (content !== null) {
+          content.style.removeProperty('--vz-text');
+          content.style.removeProperty('--vz-surface');
+          content.style.removeProperty('--vz-accent');
+        }
+        window.__dshVizScroll = 'none';
+        tableMode = false;
+        if (typeof fit === 'function') fit();
+        renderCharts();
+        build();
+        report();
+      }));
 
       section('スクロール');
       var scrollRow = row();
