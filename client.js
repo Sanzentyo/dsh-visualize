@@ -231,10 +231,14 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 .vz-menu-btn.vz-menu-bottom-left { bottom: 4px; left: 4px; }
 .vz-menu-panel {
   position: absolute; z-index: 2147483646;
-  min-width: 220px; max-width: min(300px, calc(100% - 8px)); max-height: 70vh; overflow-y: auto;
+  /* 幅は領域に収め、高さは領域の 70% で頭打ちにして中でスクロールさせる。
+     領域が低いときにパネルがはみ出して切れるのを防ぐ。 */
+  min-width: 220px; max-width: min(300px, calc(100% - 8px));
+  max-height: min(70vh, calc(100% - 8px)); overflow-y: auto; overscroll-behavior: contain;
+  /* border-box でないと max-height が padding を含まず、領域より高くなる。 */
+  box-sizing: border-box;
   /* 上端はボタンと揃える: ハンバーガーがパネルの右上コーナーに内蔵されて
      一体に見える。内容はボタンの下から始める。 */
-  top: 4px; right: 4px;
   padding: 38px 12px 10px;
   border-radius: 10px;
   background: var(--vz-surface); color: var(--vz-text);
@@ -248,15 +252,16 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 .vz-menu-panel.vz-menu-open {
   transform: scale(1); opacity: 1; pointer-events: auto;
 }
-/* 下側の位置では上向きに展開する。 */
+/* 下側の位置では下端起点で上へ展開する(padding も下側へ反転)。 */
 .vz-menu-panel.vz-menu-bottom-right, .vz-menu-panel.vz-menu-bottom-left {
-  top: auto; bottom: 4px; padding: 10px 12px 42px;
-  transform-origin: bottom right;
+  padding: 10px 12px 42px;
 }
-.vz-menu-panel.vz-menu-top-right { top: 38px; right: 4px; }
-.vz-menu-panel.vz-menu-top-left { top: 38px; left: 4px; }
-.vz-menu-panel.vz-menu-bottom-right { bottom: 38px; right: 4px; }
-.vz-menu-panel.vz-menu-bottom-left { bottom: 38px; left: 4px; }
+/* 位置は四隅。パネルはボタンと同じ上端に置き、ハンバーガーを右上に内蔵する
+   (パネル側の padding-top がボタンの居場所)。下側の位置では下端起点で上へ展開。 */
+.vz-menu-panel.vz-menu-top-right { top: 4px; right: 4px; transform-origin: top right; }
+.vz-menu-panel.vz-menu-top-left { top: 4px; left: 4px; transform-origin: top left; }
+.vz-menu-panel.vz-menu-bottom-right { top: auto; bottom: 4px; right: 4px; transform-origin: bottom right; }
+.vz-menu-panel.vz-menu-bottom-left { top: auto; bottom: 4px; left: 4px; transform-origin: bottom left; }
 .vz-menu-h {
   font-size: .82em; color: var(--vz-dim); font-weight: 500;
   margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .04em;
