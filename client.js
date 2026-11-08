@@ -51,6 +51,11 @@ window.__ModuleLoader__.load({
     }
     /** 長押しの成立: スイッチの trusted click で Safari の haptic を鳴らす。 */
     function hapticPulse() {
+      // Android は素の Vibration API で鳴らす(iOS は無視される)。
+      if (typeof navigator.vibrate === 'function' && !/iP(hone|ad|od)/.test(navigator.userAgent)) {
+        navigator.vibrate(10)
+        return
+      }
       if (hapticSwitch === null) return
       hapticSwitch.click()
     }
