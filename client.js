@@ -34,7 +34,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@76a42a5132 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@c9d86360c7 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -203,7 +203,13 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 .vz-menu-row { display: flex; align-items: center; gap: 6px; margin: 4px 0; flex-wrap: wrap; }
 .vz-menu-label { flex: 1 1 auto; color: var(--vz-dim); font-size: .92em; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .vz-menu-check { display: flex; align-items: center; gap: 6px; font-size: .92em; cursor: pointer; }
-.vz-menu-panel .btn { min-height: 36px; padding: 4px 10px; font-size: .9em; }`
+.vz-menu-panel .btn { min-height: 36px; padding: 4px 10px; font-size: .9em; }
+.vz-menu-close {
+  flex: 0 0 auto; margin-left: auto;
+  width: 28px; height: 28px; min-height: 28px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--vz-dim);
+}`
     const FRAME_RUNTIME = `
 (function () {
   var tip = null;
@@ -330,17 +336,28 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
     var panel = document.createElement('div');
     panel.className = 'vz-menu-panel vz-menu-' + pos;
     panel.hidden = true;
+    // パネル = 閉じるボタン(右上に浮く、最初のセクションと同じ高さ)+ 内容。
+    // build() は内容だけを差し替える(閉じるボタンは再構築で消えない)。
+    var content = document.createElement('div');
+    panel.appendChild(content);
+    var closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'btn vz-menu-close';
+    closeBtn.setAttribute('aria-label', 'メニューを閉じる');
+    closeBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">'
+      + '<path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg>';
+    panel.appendChild(closeBtn);
 
     function section(title) {
       var h = document.createElement('div');
       h.className = 'vz-menu-h';
       h.textContent = title;
-      panel.appendChild(h);
+      content.appendChild(h);
     }
     function row() {
       var r = document.createElement('div');
       r.className = 'vz-menu-row';
-      panel.appendChild(r);
+      content.appendChild(r);
       return r;
     }
     function button(label, fn) {
@@ -436,8 +453,14 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
       });
     }
 
+    function closeMenu() {
+      // 明示的に閉じる: 外側クリックと同じ扱い。engaged もリセットする。
+      engaged = false;
+      panel.hidden = true;
+      if (hideTimer !== null) { clearTimeout(hideTimer); hideTimer = null; }
+    }
     function build() {
-      panel.textContent = '';
+      content.textContent = '';
       if (charts().length > 0) {
         section('表示');
         var viewRow = row();
@@ -586,6 +609,7 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 
     document.body.appendChild(btn);
     document.body.appendChild(panel);
+    closeBtn.addEventListener('click', closeMenu);
 
     // 領域内に置く: body を位置の基準にする。
     if (document.body.style.position !== 'absolute') document.body.style.position = 'relative';
@@ -593,7 +617,7 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
     btn.addEventListener('click', function (e) {
       e.stopPropagation();
       panel.hidden = !panel.hidden;
-      if (!panel.hidden) { build(); armHide(); }
+      if (!panel.hidden) { engaged = false; build(); armHide(); }
     });
     document.addEventListener('click', function (e) {
       if (panel.hidden) return;
@@ -603,22 +627,41 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 
     // ── タッチ: 長押しで出す ──
     // pointerdown の 500ms 保持でハンバーガーを出し、4 秒操作がなければ引っ込める。
-    // ダブルクリック編集(data-editable)とは分けるため、長押しのみにする。
+    // ただしメニュー内で一度でも操作したら(スクロール含む)**外をクリックするまで
+    // 開いたまま**にする。ダブルクリック編集(data-editable)とは分けるため、
+    // タッチの出現は長押しのみ。
     var hideTimer = null;
+    var engaged = false;
     function armHide() {
       if (hideTimer !== null) clearTimeout(hideTimer);
-      hideTimer = setTimeout(function () { btn.classList.remove('vz-menu-open'); panel.hidden = true; }, 4000);
+      hideTimer = setTimeout(function () {
+        if (engaged) return;
+        btn.classList.remove('vz-menu-open');
+        panel.hidden = true;
+      }, 4000);
     }
+    function engage() {
+      // メニュー内での操作: 自動で閉じるのをやめる。
+      engaged = true;
+      if (hideTimer !== null) { clearTimeout(hideTimer); hideTimer = null; }
+    }
+    panel.addEventListener('pointerdown', engage, { passive: true });
+    panel.addEventListener('scroll', engage, { passive: true });
+    panel.addEventListener('input', engage, { passive: true });
+    panel.addEventListener('change', engage, { passive: true });
     function reveal() {
       btn.classList.add('vz-menu-open');
       // 長押し 1 ジェスチャでメニューまで開く(ボタン出現 → タップの 2 段階を踏ませない)。
+      engaged = false;
       panel.hidden = false;
       build();
       armHide();
     }
     if (coarse) {
       var pressTimer = null;
-      document.addEventListener('pointerdown', function () {
+      document.addEventListener('pointerdown', function (e) {
+        // メニュー内の押下は長押しの対象外(長押しは領域の内容に対するジェスチャ)。
+        if (panel.contains(e.target) || btn.contains(e.target)) return;
         pressTimer = setTimeout(reveal, 500);
       }, { passive: true });
       document.addEventListener('pointerup', function () { if (pressTimer !== null) clearTimeout(pressTimer); }, { passive: true });
