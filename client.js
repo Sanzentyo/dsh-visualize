@@ -34,7 +34,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@4ad05df376 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@542ad6175e (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -105,7 +105,7 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 }
 .btn:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover-accent); }
 .btn:disabled { opacity: .5; cursor: default; }
-.btn-primary { background: var(--vz-accent); border-color: var(--vz-accent); color: var(--vz-bg, #fff); }
+.btn-primary { background: var(--vz-accent); border-color: var(--vz-accent); color: var(--vz-accent-contrast, #fff); }
 .btn-primary:hover:not(:disabled) { opacity: .88; background: var(--vz-accent); }
 .btn-ghost { border-color: transparent; }
 .btn-block { width: 100%; }
@@ -1112,6 +1112,34 @@ body { padding: 14px 16px 16px; }`
      * `viz.chart` therefore behaves identically on both surfaces.
      */
 
+    /**
+     * The readable text colour on a given background: dark text on a light
+     * accent, white on a dark one. Background and text always ship as a
+     * matched pair so the pair survives a palette switch.
+     * @param colour - a `#rrggbb` or `rgb()/rgba()` colour.
+     * @returns the text colour to put on `colour`.
+     */
+    function contrastOn(colour) {
+      const hex = /^#([0-9a-f]{6})$/i.exec(colour)
+      let r = 0
+      let g = 0
+      let b = 0
+      if (hex !== null) {
+        const n = parseInt(hex[1], 16)
+        r = (n >> 16) & 255
+        g = (n >> 8) & 255
+        b = n & 255
+      } else {
+        const m = /^rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(colour)
+        if (m === null) return '#ffffff'
+        r = Number(m[1])
+        g = Number(m[2])
+        b = Number(m[3])
+      }
+      const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
+      return luminance > 0.62 ? '#141414' : '#ffffff'
+    }
+
     /** True when the Harness is showing its dark palette. */
     function hostIsDark() {
       if (typeof document === 'undefined') return false
@@ -1158,6 +1186,11 @@ body { padding: 14px 16px 16px; }`
       pairs.push(`--vz-surface: ${surface}`)
       pairs.push(`--vz-border: ${border}`)
       pairs.push(`--vz-accent: ${accent}`)
+      // The accent's readable text colour, computed from its luminance: a
+      // light accent needs dark text, a dark one needs white. The old
+      // `var(--vz-bg, #fff)` named a token that never existed and pinned
+      // white text onto a light dark-mode accent.
+      pairs.push(`--vz-accent-contrast: ${contrastOn(accent)}`)
       pairs.push(`--vz-font-size: ${fontSize}`)
       if (fontFamily !== '') pairs.push(`--vz-font: ${fontFamily}`)
       if (fontCode !== '') pairs.push(`--vz-font-code: ${fontCode}`)
