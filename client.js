@@ -265,7 +265,12 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 .vz-menu-row { display: flex; align-items: center; gap: 6px; margin: 4px 0; flex-wrap: wrap; }
 .vz-menu-label { flex: 1 1 auto; color: var(--vz-dim); font-size: .92em; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .vz-menu-check { display: flex; align-items: center; gap: 6px; font-size: .92em; cursor: pointer; }
-.vz-menu-panel .btn { min-height: 36px; padding: 4px 10px; font-size: .9em; }`
+.vz-menu-panel .btn { min-height: 36px; padding: 4px 10px; font-size: .9em; }
+/* 長押しの間だけ本文の選択・コールアウトを抑止する(指を離すと解除)。 */
+body.vz-longpress, body.vz-longpress * {
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+}`
     const FRAME_RUNTIME = `
 (function () {
   var tip = null;
@@ -555,75 +560,154 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
         viewRow.appendChild(tableBtn);
 
         if (!tableMode) {
-          section('コピー(グラフのデータ)');
-          charts().forEach(function (c, i) {
-            var cr = row();
-            var label = c.config && c.config.title ? c.config.title : 'グラフ ' + (i + 1);
-            var name = document.createElement('span');
-            name.className = 'vz-menu-label';
-            name.textContent = label;
-            cr.appendChild(name);
-            cr.appendChild(button('CSV', function () {
-              parent.postMessage({ dshVizCopy: tabular(c.config, ',') }, '*');
-            }));
-            cr.appendChild(button('TSV', function () {
-              parent.postMessage({ dshVizCopy: tabular(c.config, '\t') }, '*');
-            }));
-            cr.appendChild(button('Markdown', function () {
-              parent.postMessage({ dshVizCopy: toMarkdown(c.config) }, '*');
-            }));
+          section('コピー / ダウンロード');
+          // 形式のプルダウン + COPY/DL トグル + 実行ボタン 1 つ。
+          var FORMATS = [
+            ['chart-png', 'グラフ(透過 PNG)'],
+            ['frame-png', '画像(PNG 背景付き)'],
+            ['frame-jpeg', '画像(JPEG 背景付き)'],
+            ['text', 'text'],
+            ['html', 'html'],
+            ['md', 'md'],
+            ['table', '表(TSV)'],
+          ];
+          var fmtRow = row();
+          var fmt = document.createElement('select');
+          fmt.className = 'form-select';
+          fmt.style.flex = '1';
+          FORMATS.forEach(function (f) {
+            var opt = document.createElement('option');
+            opt.value = f[0];
+            opt.textContent = f[1];
+            fmt.appendChild(opt);
           });
+          fmtRow.appendChild(fmt);
+          // グラフ形式のときだけ、対象グラフを選ばせる。
+          var targetRow = row();
+          var targetSel = document.createElement('select');
+          targetSel.className = 'form-select';
+          targetSel.style.flex = '1';
+          targetRow.appendChild(targetSel);
+          function syncTarget() {
+            var chartFmt = fmt.value === 'chart-png';
+            targetRow.style.display = chartFmt && charts().length > 1 ? 'flex' : 'none';
+            if (!chartFmt) return;
+            targetSel.textContent = '';
+            charts().forEach(function (c, ci) {
+              var opt = document.createElement('option');
+              opt.value = String(ci);
+              opt.textContent = (c.config && c.config.title) || 'グラフ ' + (ci + 1);
+              targetSel.appendChild(opt);
+            });
+          }
+          fmt.addEventListener('change', syncTarget);
+          syncTarget();
+          // COPY ⇄ DL のトグル。
+          var modeRow = row();
+          var mode = 'copy';
+          var copyBtn = button('COPY チェック', function () { mode = 'copy'; syncMode(); });
+          var dlBtn = button('DL', function () { mode = 'dl'; syncMode(); });
+          function syncMode() {
+            copyBtn.textContent = mode === 'copy' ? 'COPY チェック' : 'COPY';
+            dlBtn.textContent = mode === 'dl' ? 'DL チェック' : 'DL';
+          }
+          modeRow.appendChild(copyBtn);
+          modeRow.appendChild(dlBtn);
+          // SVG を canvas に描いて dataURL を作る(背景付きは背景を塗る)。
+          function svgToDataUrl(svg, mime, background) {
+            var xml = new XMLSerializer().serializeToString(svg);
+            var img = new Image();
+            return new Promise(function (resolve) {
+              img.onload = function () {
+                var canvas = document.createElement('canvas');
+                var box = svg.getBoundingClientRect();
+                canvas.width = Math.max(1, Math.round(box.width));
+                canvas.height = Math.max(1, Math.round(box.height));
+                var ctx = canvas.getContext('2d');
+                if (background !== undefined) {
+                  ctx.fillStyle = background;
+                  ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                resolve(canvas.toDataURL(mime));
+              };
+              img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml);
+            });
+          }
+          function slugOf(config) {
+            return ((config && config.title) || 'chart').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+          }
+          function frameMarkdown() {
+            var out = [document.body.innerText];
+            charts().forEach(function (c, ci) {
+              if (includeInput.checked !== true) return;
+              out.push('', '## ' + ((c.config && c.config.title) || 'グラフ ' + (ci + 1)), '', toMarkdown(c.config), '');
+            });
+            return out.join('\\n');
+          }
+          function run() {
+            var format = fmt.value;
+            var mime = 'text/plain';
+            var name = 'visualization';
+            var done;
+            if (format === 'chart-png') {
+              var c = charts()[Number(targetSel.value) || 0];
+              if (c === undefined) return;
+              name = slugOf(c.config) + '.png';
+              mime = 'image/png';
+              done = svgToDataUrl(c.host.querySelector('svg'), mime, undefined).then(function (url) {
+                return { url: url };
+              });
+            } else if (format === 'frame-png' || format === 'frame-jpeg') {
+              var svg = document.querySelector('svg');
+              if (svg === null) return;
+              mime = format === 'frame-png' ? 'image/png' : 'image/jpeg';
+              name = format === 'frame-png' ? 'visualization.png' : 'visualization.jpg';
+              var bg = getComputedStyle(document.body).backgroundColor;
+              done = svgToDataUrl(svg, mime, bg).then(function (url) { return { url: url }; });
+            } else if (format === 'html') {
+              mime = 'text/html';
+              name = 'visualization.html';
+              done = Promise.resolve({ text: '<!doctype html>' + document.documentElement.outerHTML });
+            } else if (format === 'md') {
+              mime = 'text/markdown';
+              name = 'visualization.md';
+              done = Promise.resolve({ text: frameMarkdown() });
+            } else if (format === 'table') {
+              mime = 'text/tab-separated-values';
+              name = 'visualization.tsv';
+              var first = charts()[Number(targetSel.value) || 0];
+              done = Promise.resolve({ text: tabular(first ? first.config : { columns: [], rows: [] }, '\\t') });
+            } else {
+              name = 'visualization.txt';
+              done = Promise.resolve({ text: document.body.innerText });
+            }
+            done.then(function (out) {
+              if (mode === 'copy') {
+                var payload = out.url !== undefined ? out.url : out.text;
+                parent.postMessage({ dshVizCopy: payload }, '*');
+              } else {
+                var url = out.url !== undefined
+                  ? out.url
+                  : 'data:' + mime + ';charset=utf-8,' + encodeURIComponent(out.text);
+                parent.postMessage({ dshVizDownload: { name: name, url: url } }, '*');
+              }
+            });
+          }
+          // md にグラフの表を含めるかのチェックボックス。
+          var includeRow = row();
+          var includeCharts = document.createElement('label');
+          includeCharts.className = 'vz-menu-check';
+          var includeInput = document.createElement('input');
+          includeInput.type = 'checkbox';
+          includeInput.checked = true;
+          includeCharts.appendChild(includeInput);
+          includeCharts.appendChild(document.createTextNode('md にグラフを含む'));
+          includeRow.appendChild(includeCharts);
+          var goRow = row();
+          goRow.appendChild(button('実行', run));
         }
       }
-
-      section('ダウンロード');
-      var dlRow = row();
-      var includeCharts = document.createElement('label');
-      includeCharts.className = 'vz-menu-check';
-      var includeChartsInput = document.createElement('input');
-      includeChartsInput.type = 'checkbox';
-      includeChartsInput.checked = true;
-      includeCharts.appendChild(includeChartsInput);
-      includeCharts.appendChild(document.createTextNode('グラフを含む'));
-      dlRow.appendChild(includeCharts);
-      var dlButtons = row();
-      function download(name, mime, text) {
-        var url = 'data:' + mime + ';charset=utf-8,' + encodeURIComponent(text);
-        parent.postMessage({ dshVizDownload: { name: name, url: url } }, '*');
-      }
-      function frameText() {
-        return document.body.innerText;
-      }
-      function frameHtml() {
-        return '<!doctype html>\\n' + document.documentElement.outerHTML;
-      }
-      function frameMarkdown() {
-        var out = [frameText()];
-        charts().forEach(function (c, i) {
-          if (!includeChartsInput.checked) return;
-          out.push('', '## ' + ((c.config && c.config.title) || 'グラフ ' + (i + 1)), '', toMarkdown(c.config), '');
-        });
-        return out.join('\\n');
-      }
-      function framePng() {
-        var svg = document.querySelector('svg');
-        if (!svg) return undefined;
-        var xml = new XMLSerializer().serializeToString(svg);
-        return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml);
-      }
-      dlButtons.appendChild(button('text', function () {
-        download('visualization.txt', 'text/plain', frameText());
-      }));
-      dlButtons.appendChild(button('html', function () {
-        download('visualization.html', 'text/html', frameHtml());
-      }));
-      dlButtons.appendChild(button('md', function () {
-        download('visualization.md', 'text/markdown', frameMarkdown());
-      }));
-      dlButtons.appendChild(button('svg', function () {
-        var url = framePng();
-        if (url !== undefined) download('chart.svg', 'image/svg+xml', decodeURIComponent(url.split(',')[1]));
-      }));
 
       section('拡大率');
       var zoomRow = row();
@@ -749,8 +833,43 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
     panel.addEventListener('scroll', engage, { passive: true });
     panel.addEventListener('input', engage, { passive: true });
     panel.addEventListener('change', engage, { passive: true });
+    // ── iOS haptics ──
+    // Safari on iOS は JS から haptic を起こせない(navigator.vibrate 非対応)。
+    // Safari 17.4 の switch 入力はトグル時に haptic を鳴らすので、長押しの成立で
+    // その trusted click を起こす。Android は navigator.vibrate で鳴らす。
+    var hapticSwitch = null;
+    function hapticTrigger(el) {
+      if (el === null || typeof window === 'undefined') return;
+      if (!/iP(hone|ad|od)/.test(navigator.userAgent)) return;
+      if (el.querySelector(':scope > [data-haptic-trigger]') !== null) return;
+      var label = document.createElement('label');
+      label.setAttribute('data-haptic-trigger', '');
+      label.setAttribute('aria-hidden', 'true');
+      var ls = { position: 'absolute', inset: '0', pointerEvents: 'none', touchAction: 'manipulation' };
+      Object.keys(ls).forEach(function (k) { label.style[k] = ls[k]; });
+      label.style.setProperty('-webkit-tap-highlight-color', 'transparent');
+      // スイッチは指の下に置かない(WebKit が touchstart を handled にして
+      // スクロールを止める)。1x1 で隠し、trusted click だけを起こす。
+      hapticSwitch = document.createElement('input');
+      hapticSwitch.type = 'checkbox';
+      hapticSwitch.setAttribute('switch', '');
+      var ss = { position: 'absolute', width: '1px', height: '1px', margin: '0', visibility: 'hidden' };
+      Object.keys(ss).forEach(function (k) { hapticSwitch.style[k] = ss[k]; });
+      hapticSwitch.addEventListener('click', function (e) { e.stopPropagation(); });
+      label.appendChild(hapticSwitch);
+      if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
+      el.insertAdjacentElement('beforeend', label);
+    }
+    function hapticPulse() {
+      if (typeof navigator.vibrate === 'function' && !/iP(hone|ad|od)/.test(navigator.userAgent)) {
+        navigator.vibrate(10);
+        return;
+      }
+      if (hapticSwitch !== null) hapticSwitch.click();
+    }
     function reveal() {
-      // 長押し 1 ジェスチャでメニューまで開く(ボタン出現 → タップの 2 段階を踏ませない)。
+      // 長押し 1 ジェスチャでメニューまで開く。iOS は Safari の switch で haptic。
+      hapticPulse();
       engaged = false;
       btn.classList.add('vz-menu-open');
       btn.setAttribute('aria-expanded', 'true');
@@ -759,14 +878,17 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
       armHide();
     }
     if (coarse) {
+      hapticTrigger(document.body);
       var pressTimer = null;
+      var hold = function (on) { document.body.classList.toggle('vz-longpress', on); };
       document.addEventListener('pointerdown', function (e) {
         // メニュー内の押下は長押しの対象外(長押しは領域の内容に対するジェスチャ)。
         if (panel.contains(e.target) || btn.contains(e.target)) return;
+        hold(true);
         pressTimer = setTimeout(reveal, 500);
       }, { passive: true });
-      document.addEventListener('pointerup', function () { if (pressTimer !== null) clearTimeout(pressTimer); }, { passive: true });
-      document.addEventListener('pointercancel', function () { if (pressTimer !== null) clearTimeout(pressTimer); }, { passive: true });
+      document.addEventListener('pointerup', function () { hold(false); if (pressTimer !== null) clearTimeout(pressTimer); }, { passive: true });
+      document.addEventListener('pointercancel', function () { hold(false); if (pressTimer !== null) clearTimeout(pressTimer); }, { passive: true });
       document.addEventListener('pointermove', function (e) {
         if (pressTimer === null) return;
         // 指が動いたら長押しの取り消し(スクロールと区別する)。
