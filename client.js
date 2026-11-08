@@ -34,7 +34,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@7d39775d25 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@0b1ae53b75 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -395,9 +395,13 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
         var s = String(v);
         return sep === ',' && s.indexOf(',') >= 0 ? '"' + s + '"' : s;
       };
+      // この関数群はテンプレートリテラルの中にいる。改行のエスケープは
+      // テンプレート評価で実改行に化け、生成コードのシングルクォート文字列を
+      // 壊す(実測: バンドル内で join が改行入りの文字列になり SyntaxError)。
+      // 二重エスケープする。
       return [cols.map(cell).join(sep)].concat(rows.map(function (r) {
         return cols.map(function (_, i) { return cell(r[i]); }).join(sep);
-      })).join('\n');
+      })).join('\\n');
     }
     function toMarkdown(config) {
       var cols = config.columns || [];
@@ -406,8 +410,8 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
       var rule = '|' + cols.map(function () { return ' --- '; }).join('|') + '|';
       var body = rows.map(function (r) {
         return '| ' + cols.map(function (_, i) { return String(r[i]); }).join(' | ') + ' |';
-      }).join('\n');
-      return head + '\n' + rule + '\n' + body;
+      }).join('\\n');
+      return head + '\\n' + rule + '\\n' + body;
     }
 
     // ── 状態の保持と復元 ──
@@ -490,7 +494,7 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
         return document.body.innerText;
       }
       function frameHtml() {
-        return '<!doctype html>\n' + document.documentElement.outerHTML;
+        return '<!doctype html>\\n' + document.documentElement.outerHTML;
       }
       function frameMarkdown() {
         var out = [frameText()];
@@ -498,7 +502,7 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
           if (!includeChartsInput.checked) return;
           out.push('', '## ' + ((c.config && c.config.title) || 'グラフ ' + (i + 1)), '', toMarkdown(c.config), '');
         });
-        return out.join('\n');
+        return out.join('\\n');
       }
       function framePng() {
         var svg = document.querySelector('svg');

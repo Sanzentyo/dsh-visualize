@@ -275,7 +275,17 @@ export function apply(ctx) {
         assets.push(await writeAsset(join(store, 'assets'), asset))
       }
 
-      return { path: target, title, mode, card, scroll, width, bytes: Buffer.byteLength(html, 'utf8'), assets }
+      // width は省略時キーごと消す(lossless JSON は undefined を許さない)。
+      return {
+        path: target,
+        title,
+        mode,
+        card,
+        scroll,
+        ...(width === undefined ? {} : { width }),
+        bytes: Buffer.byteLength(html, 'utf8'),
+        assets,
+      }
     },
   }))
 
