@@ -34,7 +34,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@a62a184f5c (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@9a6fb6cc06 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -166,17 +166,19 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
    効くので、メニューはホストのパレットに追従しつつ誤設定から隔離される。
    パネルはボタンから折り畳みアニメーション(scale + opacity)で展開する。 */
 .vz-menu-btn {
-  position: absolute; z-index: 2147483646;
+  position: absolute; z-index: 2147483647;
   width: 30px; height: 30px;
   border-radius: 7px; border: 1px solid var(--vz-border);
   background: var(--vz-surface); color: var(--vz-dim);
   cursor: pointer; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
-  opacity: 0; transition: opacity .18s ease;
+  opacity: 0; transition: opacity .18s ease, border-color .16s ease;
 }
 /* vz-menu-closing は閉じた直後の 1 秒: タップが hover 状態を残す環境でも
    1 秒かけて確実にフェードアウトする(hover より優先)。 */
 .vz-menu-btn:hover:not(.vz-menu-closing), .vz-menu-btn.vz-menu-open { opacity: 1; }
+/* 開いている間はパネルと一体化: 境界を消して同じ面に見せる。 */
+.vz-menu-btn.vz-menu-open { border-color: transparent; }
 .vz-menu-btn.vz-menu-closing { opacity: 0; pointer-events: none; transition: opacity 1s ease; }
 .vz-menu-btn.vz-menu-open { opacity: 1; pointer-events: auto; }
 .vz-menu-btn.vz-menu-touch { display: none; }
@@ -186,20 +188,28 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 .vz-menu-btn.vz-menu-bottom-right { bottom: 4px; right: 4px; }
 .vz-menu-btn.vz-menu-bottom-left { bottom: 4px; left: 4px; }
 .vz-menu-panel {
-  position: absolute; z-index: 2147483647;
+  position: absolute; z-index: 2147483646;
   min-width: 220px; max-width: min(300px, calc(100% - 8px)); max-height: 70vh; overflow-y: auto;
-  padding: 10px 12px; border-radius: 10px;
+  /* 上端はボタンと揃える: ハンバーガーがパネルの右上コーナーに内蔵されて
+     一体に見える。内容はボタンの下から始める。 */
+  top: 4px; right: 4px;
+  padding: 38px 12px 10px;
+  border-radius: 10px;
   background: var(--vz-surface); color: var(--vz-text);
   border: 1px solid var(--vz-border);
   box-shadow: 0 8px 24px rgb(0 0 0 / .25);
   font-size: 13px;
-  /* ボタンから折り畳みアニメーションで展開する。origin はボタンの角。 */
-  transform-origin: top right;
+  /* ボタンから折り畳みアニメーションで展開する。 */
   transform: scale(.94); opacity: 0; pointer-events: none;
   transition: transform .16s ease, opacity .16s ease;
 }
 .vz-menu-panel.vz-menu-open {
   transform: scale(1); opacity: 1; pointer-events: auto;
+}
+/* 下側の位置では上向きに展開する。 */
+.vz-menu-panel.vz-menu-bottom-right, .vz-menu-panel.vz-menu-bottom-left {
+  top: auto; bottom: 4px; padding: 10px 12px 42px;
+  transform-origin: bottom right;
 }
 .vz-menu-panel.vz-menu-top-right { top: 38px; right: 4px; }
 .vz-menu-panel.vz-menu-top-left { top: 38px; left: 4px; }
