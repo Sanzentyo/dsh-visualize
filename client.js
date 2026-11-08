@@ -34,7 +34,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@83c60a4dce (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@3445de9c52 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -161,19 +161,23 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 
 /* ── frame menu (the runtime creates these) ───────────────────────────── */
 /* 常在しない。操作で出す: ホバーのある環境はボタン自身(右上の 30px 程度)の
-   hover で出る(領域全体の hover ではない)。タッチは長押し(500ms)で出す。
-   メニューの UI は内容側の上書き(--vz-* の上書き)の影響を一切受けない:
-   色はリテラルで固定し、誤設定(例: 極端な縮小)からも隔離する。 */
+   hover で出る。タッチは長押し(500ms)。閉じたら 1 秒だけ見せて消す。
+   色はテーマのトークン(var(--vz-*))を継承する — 上書きは .vz-content だけに
+   効くので、メニューはホストのパレットに追従しつつ誤設定から隔離される。
+   パネルはボタンから折り畳みアニメーション(scale + opacity)で展開する。 */
 .vz-menu-btn {
   position: absolute; z-index: 2147483646;
   width: 30px; height: 30px;
-  border-radius: 7px; border: 1px solid #3a3a42;
-  background: #23232a; color: #c9c9d4;
+  border-radius: 7px; border: 1px solid var(--vz-border);
+  background: var(--vz-surface); color: var(--vz-dim);
   cursor: pointer; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
-  opacity: 0; transition: opacity .12s ease, background .12s ease;
+  opacity: 0; transition: opacity .18s ease;
 }
-.vz-menu-btn:hover { opacity: 1; }
+/* vz-menu-closing は閉じた直後の 1 秒: タップが hover 状態を残す環境でも
+   1 秒かけて確実にフェードアウトする(hover より優先)。 */
+.vz-menu-btn:hover:not(.vz-menu-closing), .vz-menu-btn.vz-menu-open { opacity: 1; }
+.vz-menu-btn.vz-menu-closing { opacity: 0; pointer-events: none; transition: opacity 1s ease; }
 .vz-menu-btn.vz-menu-open { opacity: 1; pointer-events: auto; }
 .vz-menu-btn.vz-menu-touch { display: none; }
 .vz-menu-btn.vz-menu-touch.vz-menu-open { display: inline-flex; }
@@ -185,33 +189,27 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
   position: absolute; z-index: 2147483647;
   min-width: 220px; max-width: min(300px, calc(100% - 8px)); max-height: 70vh; overflow-y: auto;
   padding: 10px 12px; border-radius: 10px;
-  background: #23232a; color: #e8e8e8;
-  border: 1px solid #3a3a42;
+  background: var(--vz-surface); color: var(--vz-text);
+  border: 1px solid var(--vz-border);
   box-shadow: 0 8px 24px rgb(0 0 0 / .25);
   font-size: 13px;
+  /* ボタンから折り畳みアニメーションで展開する。origin はボタンの角。 */
+  transform-origin: top right;
+  transform: scale(.94); opacity: 0; pointer-events: none;
+  transition: transform .16s ease, opacity .16s ease;
 }
-.vz-menu-panel.vz-menu-top-right { top: 38px; right: 4px; }
-.vz-menu-panel.vz-menu-top-left { top: 38px; left: 4px; }
-.vz-menu-panel.vz-menu-bottom-right { bottom: 38px; right: 4px; }
-.vz-menu-panel.vz-menu-bottom-left { bottom: 38px; left: 4px; }
+.vz-menu-panel.vz-menu-open {
+  transform: scale(1); opacity: 1; pointer-events: auto;
+}
 .vz-menu-h {
-  font-size: .82em; color: #9a9aa6; font-weight: 500;
+  font-size: .82em; color: var(--vz-dim); font-weight: 500;
   margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .04em;
 }
 .vz-menu-panel > .vz-menu-h:first-child { margin-top: 0; }
 .vz-menu-row { display: flex; align-items: center; gap: 6px; margin: 4px 0; flex-wrap: wrap; }
-.vz-menu-label { flex: 1 1 auto; color: #9a9aa6; font-size: .92em; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.vz-menu-label { flex: 1 1 auto; color: var(--vz-dim); font-size: .92em; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .vz-menu-check { display: flex; align-items: center; gap: 6px; font-size: .92em; cursor: pointer; }
-.vz-menu-panel .btn {
-  min-height: 36px; padding: 4px 10px; font-size: .9em;
-  background: #2c2c34; border-color: #3a3a42; color: #e8e8e8;
-}
-.vz-menu-panel .form-select { background: #2c2c34; border-color: #3a3a42; color: #e8e8e8; }
-.vz-menu-close {
-  position: absolute; top: 6px; right: 6px;
-  width: 28px; height: 28px; min-height: 28px; padding: 0;
-  display: inline-flex; align-items: center; justify-content: center;
-  color: #9a9aa6;
+.vz-menu-panel .btn { min-height: 36px; padding: 4px 10px; font-size: .9em; }
 }`
     const FRAME_RUNTIME = `
 (function () {
@@ -338,13 +336,12 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
   setTimeout(fit, 150);
 
   // ── frame menu ──
-  // 既定 ON: 折りたたまれたハンバーガーが領域内の右上に出る(fixed ではなく
-  // absolute — ビジュアルの領域の中に置く)。html 要素の data-viz-controls="off"
-  // で消え、data-viz-controls-position で四隅へ移動できる。
-  // メニュー: 表示切替(グラフ/表)、コピー(CSV/TSV/Markdown)、ダウンロード、
-  // 拡大率、色、スクロール。選択は viz.state で保持され、再描画で復元される。
-  // タッチでは常時表示だと邪魔なので、**長押し(500ms)で出す**。出たあと
-  // 4 秒操作がなければ自動で引っ込む。ホバーのある環境は従来どおり常時表示。
+  // 既定 ON: 折りたたまれたハンバーガーが領域内の右上に出る(absolute — 領域の中)。
+  // html 要素の data-viz-controls="off" で消え、data-viz-controls-position で
+  // 四隅へ移動できる。メニュー: 表示切替(グラフ/表)、コピー(CSV/TSV/Markdown)、
+  // ダウンロード、拡大率、色、スクロール。選択は viz.state で保持され、再描画で復元。
+  // 出現: ホバー環境はボタン自身の hover、タッチは長押し(500ms)。閉じたら
+  // ボタンを 1 秒だけ見せて消す。パネルはボタンから折り畳みアニメーションで展開。
   (function menu() {
     var root = document.documentElement;
     if (root.getAttribute('data-viz-controls') === 'off') return;
@@ -356,23 +353,15 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
     btn.type = 'button';
     btn.className = 'vz-menu-btn vz-menu-' + pos + (coarse ? ' vz-menu-touch' : '');
     btn.setAttribute('aria-label', '表示メニュー');
+    btn.setAttribute('aria-expanded', 'false');
     btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">'
       + '<path d="M2.5 4.5h13M2.5 9h13M2.5 13.5h13" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>';
 
     var panel = document.createElement('div');
     panel.className = 'vz-menu-panel vz-menu-' + pos;
-    panel.hidden = true;
-    // パネル = 閉じるボタン(右上に浮く、最初のセクションと同じ高さ)+ 内容。
-    // build() は内容だけを差し替える(閉じるボタンは再構築で消えない)。
+    // パネルの内容だけを build() が差し替える(閉じるボタンは廃止: ハンバーガーがトグル)。
     var content = document.createElement('div');
     panel.appendChild(content);
-    var closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.className = 'btn vz-menu-close';
-    closeBtn.setAttribute('aria-label', 'メニューを閉じる');
-    closeBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">'
-      + '<path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg>';
-    panel.appendChild(closeBtn);
 
     function section(title) {
       var h = document.createElement('div');
@@ -480,9 +469,14 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
     }
 
     function closeMenu() {
-      // 明示的に閉じる: 外側クリックと同じ扱い。engaged もリセットする。
+      // ハンバーガー/外側クリックで閉じる。パネルは折り畳みアニメーションで
+      // 閉じ、ボタンは 1 秒かけてフェードアウトする(vz-menu-closing)。
       engaged = false;
-      panel.hidden = true;
+      panel.classList.remove('vz-menu-open');
+      btn.classList.remove('vz-menu-open');
+      btn.setAttribute('aria-expanded', 'false');
+      btn.classList.add('vz-menu-closing');
+      setTimeout(function () { btn.classList.remove('vz-menu-closing'); }, 1000);
       if (hideTimer !== null) { clearTimeout(hideTimer); hideTimer = null; }
     }
     function build() {
@@ -657,20 +651,24 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 
     document.body.appendChild(btn);
     document.body.appendChild(panel);
-    closeBtn.addEventListener('click', closeMenu);
 
     // 領域内に置く: body を位置の基準にする。
     if (document.body.style.position !== 'absolute') document.body.style.position = 'relative';
 
+    function isOpen() { return panel.classList.contains('vz-menu-open'); }
     btn.addEventListener('click', function (e) {
       e.stopPropagation();
-      panel.hidden = !panel.hidden;
-      if (!panel.hidden) { engaged = false; build(); armHide(); }
+      if (isOpen()) { closeMenu(); return; }
+      engaged = false;
+      panel.classList.add('vz-menu-open');
+      btn.setAttribute('aria-expanded', 'true');
+      build();
+      armHide();
     });
     document.addEventListener('click', function (e) {
-      if (panel.hidden) return;
+      if (!isOpen()) return;
       if (panel.contains(e.target) || btn.contains(e.target)) return;
-      panel.hidden = true;
+      closeMenu();
     });
 
     // ── タッチ: 長押しで出す ──
@@ -684,8 +682,7 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
       if (hideTimer !== null) clearTimeout(hideTimer);
       hideTimer = setTimeout(function () {
         if (engaged) return;
-        btn.classList.remove('vz-menu-open');
-        panel.hidden = true;
+        closeMenu();
       }, 4000);
     }
     function engage() {
@@ -698,10 +695,11 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
     panel.addEventListener('input', engage, { passive: true });
     panel.addEventListener('change', engage, { passive: true });
     function reveal() {
-      btn.classList.add('vz-menu-open');
       // 長押し 1 ジェスチャでメニューまで開く(ボタン出現 → タップの 2 段階を踏ませない)。
       engaged = false;
-      panel.hidden = false;
+      btn.classList.add('vz-menu-open');
+      btn.setAttribute('aria-expanded', 'true');
+      panel.classList.add('vz-menu-open');
       build();
       armHide();
     }
