@@ -34,7 +34,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@3445de9c52 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@a62a184f5c (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -201,6 +201,10 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 .vz-menu-panel.vz-menu-open {
   transform: scale(1); opacity: 1; pointer-events: auto;
 }
+.vz-menu-panel.vz-menu-top-right { top: 38px; right: 4px; }
+.vz-menu-panel.vz-menu-top-left { top: 38px; left: 4px; }
+.vz-menu-panel.vz-menu-bottom-right { bottom: 38px; right: 4px; }
+.vz-menu-panel.vz-menu-bottom-left { bottom: 38px; left: 4px; }
 .vz-menu-h {
   font-size: .82em; color: var(--vz-dim); font-weight: 500;
   margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .04em;
@@ -209,8 +213,7 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 .vz-menu-row { display: flex; align-items: center; gap: 6px; margin: 4px 0; flex-wrap: wrap; }
 .vz-menu-label { flex: 1 1 auto; color: var(--vz-dim); font-size: .92em; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .vz-menu-check { display: flex; align-items: center; gap: 6px; font-size: .92em; cursor: pointer; }
-.vz-menu-panel .btn { min-height: 36px; padding: 4px 10px; font-size: .9em; }
-}`
+.vz-menu-panel .btn { min-height: 36px; padding: 4px 10px; font-size: .9em; }`
     const FRAME_RUNTIME = `
 (function () {
   var tip = null;
