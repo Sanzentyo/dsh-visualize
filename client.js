@@ -76,7 +76,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@12845db818 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@7350964c36 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -266,6 +266,21 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 .vz-menu-label { flex: 1 1 auto; color: var(--vz-dim); font-size: .92em; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .vz-menu-check { display: flex; align-items: center; gap: 6px; font-size: .92em; cursor: pointer; }
 .vz-menu-panel .btn { min-height: 36px; padding: 4px 10px; font-size: .9em; }
+/* COPY ⇄ DL のスイッチ: ネイティブ checkbox をスイッチ風に描く。 */
+.vz-switch {
+  appearance: none; -webkit-appearance: none;
+  flex: 0 0 auto; width: 38px; height: 22px; margin: 0;
+  border-radius: 999px; border: 1px solid var(--vz-border);
+  background: var(--vz-border); position: relative; cursor: pointer;
+  transition: background .16s ease;
+}
+.vz-switch::after {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--vz-surface); transition: transform .16s ease;
+}
+.vz-switch:checked { background: var(--vz-accent); border-color: var(--vz-accent); }
+.vz-switch:checked::after { transform: translateX(16px); }
 /* 長押しの間だけ本文の選択・コールアウトを抑止する(指を離すと解除)。 */
 body.vz-longpress, body.vz-longpress * {
   -webkit-user-select: none; user-select: none;
@@ -602,17 +617,21 @@ body.vz-longpress, body.vz-longpress * {
           }
           fmt.addEventListener('change', syncTarget);
           syncTarget();
-          // COPY ⇄ DL のトグル。
+          // COPY ⇄ DL のスイッチ(ネイティブの checkbox をスイッチ風に見せる)。
           var modeRow = row();
-          var mode = 'copy';
-          var copyBtn = button('COPY チェック', function () { mode = 'copy'; syncMode(); });
-          var dlBtn = button('DL', function () { mode = 'dl'; syncMode(); });
-          function syncMode() {
-            copyBtn.textContent = mode === 'copy' ? 'COPY チェック' : 'COPY';
-            dlBtn.textContent = mode === 'dl' ? 'DL チェック' : 'DL';
-          }
-          modeRow.appendChild(copyBtn);
-          modeRow.appendChild(dlBtn);
+          var modeLabel = document.createElement('span');
+          modeLabel.className = 'vz-menu-label';
+          modeLabel.textContent = 'COPY';
+          var modeSwitch = document.createElement('input');
+          modeSwitch.type = 'checkbox';
+          modeSwitch.className = 'vz-switch';
+          modeSwitch.setAttribute('role', 'switch');
+          modeSwitch.setAttribute('aria-label', 'COPY と DL の切り替え');
+          modeSwitch.addEventListener('change', function () {
+            modeLabel.textContent = modeSwitch.checked ? 'DL' : 'COPY';
+          });
+          modeRow.appendChild(modeLabel);
+          modeRow.appendChild(modeSwitch);
           // SVG を canvas に描いて dataURL を作る(背景付きは背景を塗る)。
           function svgToDataUrl(svg, mime, background) {
             var xml = new XMLSerializer().serializeToString(svg);
@@ -683,7 +702,7 @@ body.vz-longpress, body.vz-longpress * {
               done = Promise.resolve({ text: document.body.innerText });
             }
             done.then(function (out) {
-              if (mode === 'copy') {
+              if (modeSwitch.checked !== true) {
                 var payload = out.url !== undefined ? out.url : out.text;
                 parent.postMessage({ dshVizCopy: payload }, '*');
               } else {
