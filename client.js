@@ -227,6 +227,34 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
     next.focus();
     activate(list, next);
   });
+
+  // ── fit-to-width ──
+  // 既定はスクロールなし。内容がフレームより横に広いとき、全体が見えるように
+  // 縮小(zoom)する。window.__dshVizScroll が 'x' | 'y' | 'both' のときはその軸の
+  // スクロールを許して縮小しない(横長の表や縦長のログなど、意図的な長さの明示指定)。
+  function fit() {
+    var root = document.documentElement;
+    var scroll = window.__dshVizScroll || 'none';
+    if (scroll === 'x' || scroll === 'both') root.style.overflowX = 'auto';
+    if (scroll === 'y' || scroll === 'both') root.style.overflowY = 'auto';
+    if (scroll !== 'none') { root.style.zoom = ''; return; }
+    root.style.overflow = 'hidden';
+    var zoom = 1;
+    for (var pass = 0; pass < 3; pass++) {
+      var wide = root.scrollWidth;
+      var avail = root.clientWidth;
+      if (wide <= avail + 1) break;
+      zoom = zoom * (avail / wide);
+      if (zoom < 0.05) zoom = 0.05;
+      document.body.style.zoom = String(zoom);
+    }
+  }
+  // The fragment's scripts run during parse, so the content exists by
+  // DOMContentLoaded; fonts and images may still shift the layout, so the
+  // load and a delayed pass re-measure.
+  document.addEventListener('DOMContentLoaded', fit);
+  addEventListener('load', fit);
+  setTimeout(fit, 150);
 })()`
     const FRAME_CHART = `
 (function () {
@@ -1364,6 +1392,8 @@ body { padding: 14px 16px 16px; }`
 
       const wide = payload.mode === 'wide'
       const card = payload.card === true
+      const scroll = typeof payload.scroll === 'string' ? payload.scroll : 'none'
+      const widthPx = typeof payload.width === 'number' && payload.width > 0 ? payload.width : undefined
       // A missing runtime would leave `viz` undefined and every JS-drawn chart
       // blank while the static HTML still rendered — say so instead of showing
       // a half-empty card.
@@ -1378,6 +1408,7 @@ body { padding: 14px 16px 16px; }`
           + `<script>window.__dshVizPath=${JSON.stringify(payload.path)}</script>`
           + `<script>window.__dshVizSession=${JSON.stringify(sessionOf(payload.path) ?? '')}</script>`
           + `<script>window.__dshVizState=${JSON.stringify(restored ?? null)}</script>`
+          + `<script>window.__dshVizScroll=${JSON.stringify(scroll)}</script>`
           + `<script>${FRAME_SCRIPT}</script>`
           + html + heightReporter(nonce) + `</body></html>`
 
@@ -1465,12 +1496,13 @@ body { padding: 14px 16px 16px; }`
 
       if (!card) {
         // 既定は本文に溶け込む。枠も見出しも付けず、呼び出し位置に可視化だけを置く。
-        // 幅は本文カラム(--dsh-chat-content-width、最大 920px)いっぱいに追従させる。
+        // 幅は既定で本文カラムいっぱい(max 920px)。width 指定があるときはその幅に
+        // 縮めて中央に置く。
         return h('div', {
           'data-dsh-visualize': payload.title,
           style: {
-            margin: '10px 0',
-            maxWidth: '100%',
+            margin: widthPx === undefined ? '10px 0' : '10px auto',
+            maxWidth: widthPx === undefined ? '100%' : `${widthPx}px`,
             color: 'var(--dsw-alias-label-primary)',
           },
         }, body)
@@ -1479,11 +1511,11 @@ body { padding: 14px 16px 16px; }`
       return h('div', {
         'data-dsh-visualize': payload.title,
         style: {
-          margin: '10px 0',
+          margin: widthPx === undefined ? '10px 0' : '10px auto',
+          maxWidth: widthPx === undefined ? '100%' : `${widthPx}px`,
           border: '1px solid var(--dsw-alias-border-l1)',
           borderRadius: '12px',
           overflow: 'hidden',
-          maxWidth: '100%',
           background: 'var(--dsw-alias-bg-layer-1)',
           color: 'var(--dsw-alias-label-primary)',
         },

@@ -42,7 +42,7 @@ const USER_SKILLS = process.env.DSH_SKILLS
 
 /** client.js locations, by role. */
 const CLIENT = join(pluginRoot, 'client.js')
-const PLUGIN_FILES = ['client.js', 'index.js', 'lib/csv.js']
+const PLUGIN_FILES = ['client.js', 'index.js', 'lib/csv.js', 'lib/validate.js']
 
 const BEGIN = '    // <generated:frame-runtime>'
 const END = '    // </generated:frame-runtime>'

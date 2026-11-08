@@ -13,7 +13,7 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, sep } from 'node:path'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { assertHtml, assertMode, assertTitle, DEFAULT_DIR, destination, MAX_BYTES, MODES } from './lib/validate.js'
+import { assertHtml, assertMode, assertScroll, assertTitle, DEFAULT_DIR, destination, MAX_BYTES, MODES, SCROLLS } from './lib/validate.js'
 import { buildCsvChart, CHART_TYPES, FUNCS, MAX_CSV_BYTES } from './lib/csv.js'
 
 /** Stable Loader identity. */
@@ -203,6 +203,17 @@ export function apply(ctx) {
         description: 'Draw a card frame (border, background, title header). Default false: the visual melts into '
           + 'the message text like a code block does. Use card only when the visual needs separation from the text.',
       },
+      scroll: {
+        type: 'string',
+        enum: ['none', 'x', 'y', 'both'],
+        description: 'Scrolling inside the frame. Default none: the content scales to fit the width, nothing scrolls. '
+          + 'Use x, y or both when the content is intentionally long (a wide table, a tall log) and must keep its size.',
+      },
+      width: {
+        type: 'integer',
+        description: 'The visualization width in px, narrower than the message column; the wrapper centers it. '
+          + 'Omit for the full column width.',
+      },
       path: {
         type: 'string',
         description: 'Destination file. Defaults to the Session store, keyed by the title.',
@@ -230,6 +241,8 @@ export function apply(ctx) {
           title: { type: 'string', required: true },
           mode: { type: 'string', required: true },
           card: { type: 'boolean', required: true },
+          scroll: { type: 'string', required: true },
+          width: { type: 'integer' },
           bytes: { type: 'integer', required: true },
           assets: { type: 'array', items: { type: 'string' } },
         },
@@ -241,6 +254,8 @@ export function apply(ctx) {
       const html = assertHtml(args.html)
       const mode = assertMode(args.mode)
       const card = args.card === true
+      const scroll = assertScroll(args.scroll)
+      const width = typeof args.width === 'number' && args.width > 0 ? args.width : undefined
       // One store per Session, so a thread's visualizations stay together and no
       // workspace accumulates its own artifact directory. `api/file` needs the
       // absolute path this returns.
@@ -260,7 +275,7 @@ export function apply(ctx) {
         assets.push(await writeAsset(join(store, 'assets'), asset))
       }
 
-      return { path: target, title, mode, card, bytes: Buffer.byteLength(html, 'utf8'), assets }
+      return { path: target, title, mode, card, scroll, width, bytes: Buffer.byteLength(html, 'utf8'), assets }
     },
   }))
 
@@ -319,6 +334,12 @@ export function apply(ctx) {
         description: 'Draw a card frame (border, background, title header). Default false: the visual melts into '
           + 'the message text like a code block does.',
       },
+      scroll: {
+        type: 'string',
+        enum: SCROLLS,
+        description: 'Scrolling inside the frame. Default none: the content scales to fit the width, nothing scrolls. '
+          + 'Use x, y or both when the content is intentionally long (a wide table, a tall log) and must keep its size.',
+      },
     },
     output: {
       schema: {
@@ -329,6 +350,7 @@ export function apply(ctx) {
           title: { type: 'string', required: true },
           mode: { type: 'string', required: true },
           card: { type: 'boolean', required: true },
+          scroll: { type: 'string', required: true },
           bytes: { type: 'integer', required: true },
           rows: { type: 'integer', required: true, description: 'Aggregated group count.' },
           groups: {
