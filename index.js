@@ -112,7 +112,9 @@ export function apply(ctx) {
           return new Response('null', { status: 200, headers: { 'content-type': 'application/json' } })
         }
       }
-      const body = JSON.parse(new TextDecoder().decode(request.body ?? new Uint8Array()))
+      // request.body は undici の ReadableStream。decode() に渡すと TypeError
+      // になり、webserver のラッパーが素の 400 に変換する(実測)。await で読む。
+      const body = JSON.parse(await request.text())
       const statePath = statePathOf(String(body.session ?? ''), String(body.title ?? ''))
       if (statePath === undefined) return new Response('unknown visualization', { status: 400 })
       await mkdir(dirname(statePath), { recursive: true })
