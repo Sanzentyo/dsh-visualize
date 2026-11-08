@@ -34,7 +34,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@0b1ae53b75 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@942b62238d (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -160,10 +160,8 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 }
 
 /* ── frame menu (the runtime creates these) ───────────────────────────── */
-/* 既定 ON: ハンバーガー(SVG 三本線)が領域内の右上に載る。fixed ではなく
-   absolute — body を位置の基準にするので、領域の外に出ない。ホバーのある
-   環境では薄く常在してホバーで濃くなる。タッチでは常時表示が邪魔なので
-   長押しで出し(vz-menu-open)、4 秒で引っ込む。 */
+/* 常在しない。操作で出す: ホバーのある環境は領域への hover で、タッチは
+   長押し(500ms)で出す。出ている間だけ操作でき、外れる/4 秒で引っ込む。 */
 .vz-menu-btn {
   position: absolute; z-index: 2147483646;
   width: 30px; height: 30px;
@@ -171,12 +169,13 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
   background: var(--vz-surface); color: var(--vz-dim);
   cursor: pointer; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
-  opacity: .5; transition: opacity .12s ease, background .12s ease;
+  opacity: 0; pointer-events: none;
+  transition: opacity .12s ease;
 }
 @media (hover: hover) {
-  .vz-menu-btn:hover { opacity: 1; }
+  body:hover .vz-menu-btn { opacity: 1; pointer-events: auto; }
 }
-.vz-menu-btn.vz-menu-open { opacity: 1; }
+.vz-menu-btn.vz-menu-open { opacity: 1; pointer-events: auto; }
 .vz-menu-btn.vz-menu-touch { display: none; }
 .vz-menu-btn.vz-menu-touch.vz-menu-open { display: inline-flex; }
 .vz-menu-top-right { top: 4px; right: 4px; }
