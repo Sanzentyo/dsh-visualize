@@ -17,6 +17,43 @@ window.__ModuleLoader__.load({
   id: 'dsh-visualize',
   factory(require) {
     const React = require('react')
+
+    /**
+     * Safari on iOS では JS から haptic を直接起こせない(navigator.vibrate
+     * 非対応)。Safari 17.4 の switch 入力はトグル時に haptic を鳴らすので、
+     * 長押しの成立時にその trusted click を起こす。
+     * tijn.dev/projects/ios-haptics と同じ方式のインライン実装。
+     */
+    let hapticSwitch = null
+    function hapticTrigger(element) {
+      if (element === null || element === undefined || typeof window === 'undefined') return
+      if (!/iP(hone|ad|od)/.test(navigator.userAgent)) return
+      if (element.querySelector(':scope > [data-haptic-trigger]') !== null) return
+      const labelEl = document.createElement('label')
+      labelEl.setAttribute('data-haptic-trigger', '')
+      labelEl.setAttribute('aria-hidden', 'true')
+      Object.assign(labelEl.style, {
+        position: 'absolute', inset: '0', pointerEvents: 'none', touchAction: 'manipulation',
+      })
+      labelEl.style.setProperty('-webkit-tap-highlight-color', 'transparent')
+      // スイッチは指の下に置かない: WebKit はその touchstart を handled にし、
+      // スクロールを止める。1x1 で隠し、trusted click だけを起こす。
+      hapticSwitch = document.createElement('input')
+      hapticSwitch.type = 'checkbox'
+      hapticSwitch.setAttribute('switch', '')
+      Object.assign(hapticSwitch.style, {
+        position: 'absolute', width: '1px', height: '1px', margin: '0', visibility: 'hidden',
+      })
+      hapticSwitch.addEventListener('click', event => event.stopPropagation())
+      labelEl.append(hapticSwitch)
+      if (getComputedStyle(element).position === 'static') element.style.position = 'relative'
+      element.insertAdjacentElement('beforeend', labelEl)
+    }
+    /** 長押しの成立: スイッチの trusted click で Safari の haptic を鳴らす。 */
+    function hapticPulse() {
+      if (hapticSwitch === null) return
+      hapticSwitch.click()
+    }
     const h = React.createElement
 
     /**
@@ -34,7 +71,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@9a6fb6cc06 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@12845db818 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
