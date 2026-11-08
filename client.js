@@ -34,7 +34,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@c9d86360c7 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@7ba2c4ea62 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -160,8 +160,8 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 }
 
 /* ── frame menu (the runtime creates these) ───────────────────────────── */
-/* 常在しない。操作で出す: ホバーのある環境は領域への hover で、タッチは
-   長押し(500ms)で出す。出ている間だけ操作でき、外れる/4 秒で引っ込む。 */
+/* 常在しない。操作で出す: ホバーのある環境は**ボタン自身(右上の 30px 程度)**
+   の hover で出る(領域全体の hover ではない)。タッチは長押し(500ms)で出す。 */
 .vz-menu-btn {
   position: absolute; z-index: 2147483646;
   width: 30px; height: 30px;
@@ -169,12 +169,10 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
   background: var(--vz-surface); color: var(--vz-dim);
   cursor: pointer; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
-  opacity: 0; pointer-events: none;
+  opacity: 0; pointer-events: auto;
   transition: opacity .12s ease;
 }
-@media (hover: hover) {
-  body:hover .vz-menu-btn { opacity: 1; pointer-events: auto; }
-}
+.vz-menu-btn:hover { opacity: 1; }
 .vz-menu-btn.vz-menu-open { opacity: 1; pointer-events: auto; }
 .vz-menu-btn.vz-menu-touch { display: none; }
 .vz-menu-btn.vz-menu-touch.vz-menu-open { display: inline-flex; }
@@ -205,7 +203,7 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 .vz-menu-check { display: flex; align-items: center; gap: 6px; font-size: .92em; cursor: pointer; }
 .vz-menu-panel .btn { min-height: 36px; padding: 4px 10px; font-size: .9em; }
 .vz-menu-close {
-  flex: 0 0 auto; margin-left: auto;
+  position: absolute; top: 6px; right: 6px;
   width: 28px; height: 28px; min-height: 28px; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
   color: var(--vz-dim);
