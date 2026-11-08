@@ -160,41 +160,42 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 }
 
 /* ── frame menu (the runtime creates these) ───────────────────────────── */
-/* 既定 ON: 折りたたまれたハンバーガー。ホバーのある環境では薄く常在して
-   ホバーで濃くなる。タッチ(pointer: coarse)ではホバーが無いので常に濃く、
-   44px のタップ領域を保つ。data-viz-controls-position で四隅へ移動できる。 */
+/* 既定 ON: ハンバーガー(SVG 三本線)が領域内の右上に載る。fixed ではなく
+   absolute — body を位置の基準にするので、領域の外に出ない。ホバーのある
+   環境では薄く常在してホバーで濃くなる。タッチでは常時表示が邪魔なので
+   長押しで出し(vz-menu-open)、4 秒で引っ込む。 */
 .vz-menu-btn {
-  position: fixed; z-index: 2147483646;
-  width: 32px; height: 32px; min-width: 44px; min-height: 44px;
-  border-radius: 8px; border: 1px solid var(--vz-border);
+  position: absolute; z-index: 2147483646;
+  width: 30px; height: 30px;
+  border-radius: 7px; border: 1px solid var(--vz-border);
   background: var(--vz-surface); color: var(--vz-dim);
-  font-size: 16px; line-height: 1; cursor: pointer;
-  opacity: .55; transition: opacity .12s ease, background .12s ease;
-  padding: 0;
+  cursor: pointer; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  opacity: .5; transition: opacity .12s ease, background .12s ease;
 }
 @media (hover: hover) {
-  .vz-menu-btn:hover { opacity: 1; background: var(--vz-surface); }
+  .vz-menu-btn:hover { opacity: 1; }
 }
-@media (hover: none) {
-  .vz-menu-btn { opacity: .8; }
-}
-.vz-menu-top-right { top: 6px; right: 6px; }
-.vz-menu-top-left { top: 6px; left: 6px; }
-.vz-menu-bottom-right { bottom: 6px; right: 6px; }
-.vz-menu-bottom-left { bottom: 6px; left: 6px; }
+.vz-menu-btn.vz-menu-open { opacity: 1; }
+.vz-menu-btn.vz-menu-touch { display: none; }
+.vz-menu-btn.vz-menu-touch.vz-menu-open { display: inline-flex; }
+.vz-menu-top-right { top: 4px; right: 4px; }
+.vz-menu-top-left { top: 4px; left: 4px; }
+.vz-menu-bottom-right { bottom: 4px; right: 4px; }
+.vz-menu-bottom-left { bottom: 4px; left: 4px; }
 .vz-menu-panel {
-  position: fixed; z-index: 2147483647;
-  min-width: 240px; max-width: 300px; max-height: 70vh; overflow-y: auto;
+  position: absolute; z-index: 2147483647;
+  min-width: 220px; max-width: min(300px, calc(100% - 8px)); max-height: 70vh; overflow-y: auto;
   padding: 10px 12px; border-radius: 10px;
   background: var(--vz-surface); color: var(--vz-text);
   border: 1px solid var(--vz-border);
   box-shadow: 0 8px 24px rgb(0 0 0 / .25);
   font-size: 13px;
 }
-.vz-menu-top-right { top: 52px; right: 6px; }
-.vz-menu-top-left { top: 52px; left: 6px; }
-.vz-menu-bottom-right { bottom: 52px; right: 6px; }
-.vz-menu-bottom-left { bottom: 52px; left: 6px; }
+.vz-menu-top-right { top: 38px; right: 4px; }
+.vz-menu-top-left { top: 38px; left: 4px; }
+.vz-menu-bottom-right { bottom: 38px; right: 4px; }
+.vz-menu-bottom-left { bottom: 38px; left: 4px; }
 .vz-menu-h {
   font-size: .82em; color: var(--vz-dim); font-weight: 500;
   margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .04em;
@@ -203,7 +204,7 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 .vz-menu-row { display: flex; align-items: center; gap: 6px; margin: 4px 0; flex-wrap: wrap; }
 .vz-menu-label { flex: 1 1 auto; color: var(--vz-dim); font-size: .92em; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .vz-menu-check { display: flex; align-items: center; gap: 6px; font-size: .92em; cursor: pointer; }
-.vz-menu-panel .btn { min-height: 32px; padding: 4px 10px; font-size: .9em; }`
+.vz-menu-panel .btn { min-height: 36px; padding: 4px 10px; font-size: .9em; }`
     const FRAME_RUNTIME = `
 (function () {
   var tip = null;
@@ -306,11 +307,13 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
   setTimeout(fit, 150);
 
   // ── frame menu ──
-  // 既定 ON: 折りたたまれたハンバーガーが右上に出る。html 要素の
-  // data-viz-controls="off" で消え、data-viz-controls-position で位置が変わる。
+  // 既定 ON: 折りたたまれたハンバーガーが領域内の右上に出る(fixed ではなく
+  // absolute — ビジュアルの領域の中に置く)。html 要素の data-viz-controls="off"
+  // で消え、data-viz-controls-position で四隅へ移動できる。
   // メニュー: 表示切替(グラフ/表)、コピー(CSV/TSV/Markdown)、ダウンロード、
   // 拡大率、色、スクロール。選択は viz.state で保持され、再描画で復元される。
-  // タッチではホバーが無いので常時表示、メニュー項目は 44px 以上のタップ領域。
+  // タッチでは常時表示だと邪魔なので、**長押し(500ms)で出す**。出たあと
+  // 4 秒操作がなければ自動で引っ込む。ホバーのある環境は従来どおり常時表示。
   (function menu() {
     var root = document.documentElement;
     if (root.getAttribute('data-viz-controls') === 'off') return;
@@ -320,9 +323,10 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 
     var btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'vz-menu-btn vz-menu-' + pos;
+    btn.className = 'vz-menu-btn vz-menu-' + pos + (coarse ? ' vz-menu-touch' : '');
     btn.setAttribute('aria-label', '表示メニュー');
-    btn.textContent = '⋯';
+    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">'
+      + '<path d="M2.5 4.5h13M2.5 9h13M2.5 13.5h13" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>';
 
     var panel = document.createElement('div');
     panel.className = 'vz-menu-panel vz-menu-' + pos;
@@ -584,17 +588,47 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
     document.body.appendChild(btn);
     document.body.appendChild(panel);
 
-    // タッチではホバーが無い: ハンバーガーは常に見える(CSS 側で分岐)。
+    // 領域内に置く: body を位置の基準にする。
+    if (document.body.style.position !== 'absolute') document.body.style.position = 'relative';
+
     btn.addEventListener('click', function (e) {
       e.stopPropagation();
       panel.hidden = !panel.hidden;
-      if (!panel.hidden) build();
+      if (!panel.hidden) { build(); armHide(); }
     });
     document.addEventListener('click', function (e) {
       if (panel.hidden) return;
       if (panel.contains(e.target) || btn.contains(e.target)) return;
       panel.hidden = true;
     });
+
+    // ── タッチ: 長押しで出す ──
+    // pointerdown の 500ms 保持でハンバーガーを出し、4 秒操作がなければ引っ込める。
+    // ダブルクリック編集(data-editable)とは分けるため、長押しのみにする。
+    var hideTimer = null;
+    function armHide() {
+      if (hideTimer !== null) clearTimeout(hideTimer);
+      hideTimer = setTimeout(function () { btn.classList.remove('vz-menu-open'); panel.hidden = true; }, 4000);
+    }
+    function reveal() {
+      btn.classList.add('vz-menu-open');
+      armHide();
+    }
+    if (coarse) {
+      var pressTimer = null;
+      document.addEventListener('pointerdown', function () {
+        pressTimer = setTimeout(reveal, 500);
+      }, { passive: true });
+      document.addEventListener('pointerup', function () { if (pressTimer !== null) clearTimeout(pressTimer); }, { passive: true });
+      document.addEventListener('pointercancel', function () { if (pressTimer !== null) clearTimeout(pressTimer); }, { passive: true });
+      document.addEventListener('pointermove', function (e) {
+        if (pressTimer === null) return;
+        // 指が動いたら長押しの取り消し(スクロールと区別する)。
+        if (e.pointerType === 'touch' && (Math.abs(e.movementX || 0) > 6 || Math.abs(e.movementY || 0) > 6)) {
+          clearTimeout(pressTimer);
+        }
+      }, { passive: true });
+    }
 
     // ── ダブルクリックで要素編集(data-editable) ──
     // 原本は保持し、上書きは edits として state に保存、表示は上書き優先。
