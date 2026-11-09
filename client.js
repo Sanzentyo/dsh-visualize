@@ -76,7 +76,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@2ae6ca8cfd (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@581f2e4c95 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -266,22 +266,6 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 /* 内容の器: 先頭にボタンの行ぶん(30px)の余白を確保する。 */
 .vz-menu-content { padding-top: 30px; }
 .vz-menu-content-bottom { padding-top: 0; padding-bottom: 30px; }
-/* 畳んだ状態: 内容を隠し、1 行のカードだけを出す。カードのタップで戻す。 */
-.vz-menu-card {
-  position: absolute; left: 4px; right: 40px; top: 4px;
-  display: none; align-items: center;
-  min-height: 30px; padding: 5px 10px;
-  border-radius: 8px; border: 1px solid var(--vz-border);
-  background: var(--vz-surface); color: var(--vz-text);
-  font: inherit; font-size: 12px; text-align: left; cursor: pointer;
-}
-body.vz-collapsed .vz-menu-card { display: inline-flex; }
-body.vz-collapsed .vz-content { display: none; }
-/* 横スワイプの後: その位置からの文字選択を許可する。 */
-body.vz-selecting, body.vz-selecting * {
-  -webkit-user-select: text; user-select: text;
-  -webkit-touch-callout: default;
-}
 .vz-menu-h {
   font-size: .82em; color: var(--vz-dim); font-weight: 500;
   margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .04em;
@@ -421,12 +405,11 @@ body.vz-longpress, body.vz-longpress * {
     var body = document.body;
     var menuBtn = document.querySelector('.vz-menu-btn');
     var menuPanel = document.querySelector('.vz-menu-panel');
-    var menuCard = document.querySelector('.vz-menu-card');
     var kids = Array.prototype.slice.call(body.children);
     var target = wrapper();
     kids.forEach(function (kid) {
-      // メニュー UI と畳みカードは内容の外に残す(内容を隠しても操作できる)。
-      if (kid === menuBtn || kid === menuPanel || kid === menuCard) return;
+      // メニュー UI は内容の外に残す(内容を隠しても操作できる)。
+      if (kid === menuBtn || kid === menuPanel) return;
       target.appendChild(kid);
     });
   });
@@ -935,133 +918,41 @@ body.vz-longpress, body.vz-longpress * {
       build();
       armHide();
     }
-    // 畳んだ 1 行カード。タップで内容を戻す。
-    var card = document.createElement('button');
-    card.type = 'button';
-    card.className = 'vz-menu-card';
-    card.textContent = 'ビジュアル(タップで展開)';
-    card.addEventListener('click', function () {
-      expandContent();
-      hapticPulse(18);
-    });
-    document.body.appendChild(card);
-    var collapsed = false;
-    function collapseContent() {
-      if (collapsed) return;
-      collapsed = true;
-      document.body.classList.add('vz-collapsed');
-      btn.classList.remove('vz-menu-open');
-      if (isOpen()) closeMenu();
-      hapticPulse(24);
-    }
-    function expandContent() {
-      if (!collapsed) return;
-      collapsed = false;
-      document.body.classList.remove('vz-collapsed');
-    }
-    // ── タッチのジェスチャ ──
-    // 長押し(500ms)でハンバーガー、そのまま下へフリックでメニュー展開、
-    // 上へスワイプで畳む、横へスワイプでその位置からの文字選択を許可する。
-    // どの操作の成立でも haptic を鳴らす(展開・畳みのときも)。
+    // ── タッチ: 長押しでメニューを表示する ──
+    // スワイプは扱わない(誤動作が多く、畳みや選択モードは撤回した)。
     if (coarse) {
       installHaptics();
-      // touch イベントで扱う(pointer 系はスクロール開始で cancel される)。
-      // 長押し(500ms)の後は **どの方向へスワイプしてもメニューが開く**。
-      // 畳みは「長押しなしの上スワイプ」で、閾値は大きめ(誤爆を防ぐ)。
       var HOLD_MS = 500;
-      var SWIPE_MIN = 26;
-      var COLLAPSE_MIN = 64;
       var holdTimer = null;
-      var armed = false;
-      var axis = null;
-      var startX = 0;
-      var startY = 0;
       var tracking = false;
       var suppress = function (on) { document.body.classList.toggle('vz-longpress', on); };
-
-      function begin(x, y) {
+      function cancelHold() {
+        tracking = false;
+        suppress(false);
+        if (holdTimer !== null) { clearTimeout(holdTimer); holdTimer = null; }
+      }
+      document.addEventListener('touchstart', function (e) {
+        if (panel.contains(e.target) || btn.contains(e.target)) return;
+        var t = e.touches[0];
+        if (t === undefined) return;
         tracking = true;
-        armed = false;
-        axis = null;
-        startX = x;
-        startY = y;
         suppress(true);
         if (holdTimer !== null) clearTimeout(holdTimer);
         holdTimer = setTimeout(function () {
           holdTimer = null;
-          armed = true;
-          // 長押しの成立: ハンバーガーを出し、ここからどの方向のスワイプでも開く。
-          btn.classList.add('vz-menu-open');
-          btn.setAttribute('aria-expanded', 'true');
+          // 長押しの成立: メニューを開く(haptic も鳴らす)。
+          openMenu();
           hapticPulse(20);
         }, HOLD_MS);
-      }
-
-      function move(x, y, prevent) {
-        if (!tracking) return;
-        var dx = x - startX;
-        var dy = y - startY;
-        if (axis === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
-          axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
-          if (holdTimer !== null) { clearTimeout(holdTimer); holdTimer = null; }
-          suppress(false);
-          if (axis === 'x' && armed !== true) {
-            // 横スワイプ(長押し前): この位置からの文字選択を許可する。
-            document.body.classList.add('vz-selecting');
-            hapticPulse(12);
-            if (prevent !== undefined) prevent();
-            return;
-          }
-        }
-        if (axis === null) return;
-        var far = Math.abs(dx) > SWIPE_MIN || Math.abs(dy) > SWIPE_MIN;
-        if (armed === true && far && !isOpen()) {
-          // 長押しの後のスワイプ: 方向を問わずメニューを展開する。
-          openMenu();
-          hapticPulse(24);
-          if (prevent !== undefined) prevent();
-          armed = false;
-          return;
-        }
-        if (armed !== true && axis === 'y' && dy < -COLLAPSE_MIN && !collapsed) {
-          // 長押しなしの上スワイプ: 十分な距離のときだけ 1 行カードへ畳む。
-          collapseContent();
-          if (prevent !== undefined) prevent();
-          return;
-        }
-        if (armed !== true && axis === 'y' && dy > COLLAPSE_MIN && !isOpen()) {
-          // 長押しなしの下スワイプ: メニューを開く。
-          openMenu();
-          hapticPulse(24);
-          if (prevent !== undefined) prevent();
-        }
-      }
-
-      function end() {
-        tracking = false;
-        armed = false;
-        axis = null;
-        suppress(false);
-        document.body.classList.remove('vz-selecting');
-        if (holdTimer !== null) { clearTimeout(holdTimer); holdTimer = null; }
-      }
-
-      document.addEventListener('touchstart', function (e) {
-        if (panel.contains(e.target) || btn.contains(e.target) || card === e.target) return;
-        var t = e.touches[0];
-        if (t === undefined) return;
-        begin(t.clientX, t.clientY);
       }, { passive: true });
+      // 指が大きく動いたら長押しを取り消す(スクロールと区別する)。
       document.addEventListener('touchmove', function (e) {
-        var t = e.touches[0];
-        if (t === undefined) return;
-        move(t.clientX, t.clientY, function () {
-          // 自分のジェスチャが確定した後だけスクロールを止める。
-          if (e.cancelable) e.preventDefault();
-        });
-      }, { passive: false });
-      document.addEventListener('touchend', end, { passive: true });
-      document.addEventListener('touchcancel', end, { passive: true });
+        if (!tracking) return;
+        if (e.touches.length !== 1) { cancelHold(); return; }
+        cancelHold();
+      }, { passive: true });
+      document.addEventListener('touchend', cancelHold, { passive: true });
+      document.addEventListener('touchcancel', cancelHold, { passive: true });
     }
     // ── ダブルクリックで要素編集(data-editable) ──
     // 原本は保持し、上書きは edits として state に保存、表示は上書き優先。
@@ -1268,88 +1159,36 @@ body.vz-longpress, body.vz-longpress * {
       });
     }
 
-    // 畳みカード(フレーム内の操作)。
-    var collapsed = false;
-    var card = document.createElement('button');
-    card.type = 'button';
-    card.className = 'vz-menu-card';
-    card.textContent = 'ビジュアル(タップで展開)';
-    card.addEventListener('click', function () {
-      collapsed = false;
-      document.body.classList.remove('vz-collapsed');
-      parent.postMessage({ dshVizHaptic: 18 }, '*');
-    });
-    document.body.appendChild(card);
-
-    // 長押し・スワイプ(畳みと選択モードのみ。メニューは親が持つ)。
+    // 長押し: 親へ告げる(親がハンバーガーを出し、haptic も鳴らす)。
+    // スワイプや畳みは撤回した。
     var HOLD_MS = 500;
-    var COLLAPSE_MIN = 64;
     var holdTimer = null;
-    var armed = false;
-    var axis = null;
-    var startX = 0;
-    var startY = 0;
     var tracking = false;
     var coarse = false;
-    try { coarse = matchMedia('(pointer: coarse)').matches; } catch (e) { /* no matchMedia */ }
+    try { coarse = matchMedia('(pointer: coarse)').matches; } catch (e2) { /* no matchMedia */ }
     if (coarse) {
-      document.addEventListener('touchstart', function (e) {
-        if (card === e.target) return;
-        var t = e.touches[0];
+      function cancelHold() {
+        tracking = false;
+        document.body.classList.remove('vz-longpress');
+        if (holdTimer !== null) { clearTimeout(holdTimer); holdTimer = null; }
+      }
+      document.addEventListener('touchstart', function (e3) {
+        var t = e3.touches[0];
         if (t === undefined) return;
         tracking = true;
-        armed = false;
-        axis = null;
-        startX = t.clientX;
-        startY = t.clientY;
         document.body.classList.add('vz-longpress');
         if (holdTimer !== null) clearTimeout(holdTimer);
         holdTimer = setTimeout(function () {
           holdTimer = null;
-          armed = true;
-          // 長押しの成立を親へ告げる(親がハンバーガーを出して haptic を鳴らす)。
           parent.postMessage({ dshVizHold: true }, '*');
         }, HOLD_MS);
       }, { passive: true });
-      document.addEventListener('touchmove', function (e) {
+      document.addEventListener('touchmove', function () {
         if (!tracking) return;
-        var t = e.touches[0];
-        if (t === undefined) return;
-        var dx = t.clientX - startX;
-        var dy = t.clientY - startY;
-        if (axis === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
-          axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
-          if (holdTimer !== null) { clearTimeout(holdTimer); holdTimer = null; }
-          document.body.classList.remove('vz-longpress');
-          if (axis === 'x' && armed !== true) {
-            document.body.classList.add('vz-selecting');
-            parent.postMessage({ dshVizHaptic: 12 }, '*');
-          }
-        }
-        if (axis === null) return;
-        if (armed === true && (Math.abs(dx) > 26 || Math.abs(dy) > 26)) {
-          parent.postMessage({ dshVizOpenMenu: true }, '*');
-          armed = false;
-          if (e.cancelable) e.preventDefault();
-          return;
-        }
-        if (armed !== true && axis === 'y' && dy < -COLLAPSE_MIN && !collapsed) {
-          collapsed = true;
-          document.body.classList.add('vz-collapsed');
-          parent.postMessage({ dshVizHaptic: 24 }, '*');
-          if (e.cancelable) e.preventDefault();
-        }
-      }, { passive: false });
-      var end = function () {
-        tracking = false;
-        armed = false;
-        axis = null;
-        document.body.classList.remove('vz-longpress');
-        document.body.classList.remove('vz-selecting');
-        if (holdTimer !== null) { clearTimeout(holdTimer); holdTimer = null; }
-      };
-      document.addEventListener('touchend', end, { passive: true });
-      document.addEventListener('touchcancel', end, { passive: true });
+        cancelHold();
+      }, { passive: true });
+      document.addEventListener('touchend', cancelHold, { passive: true });
+      document.addEventListener('touchcancel', cancelHold, { passive: true });
     }
 
     // 親からのコマンド。
