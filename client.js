@@ -76,7 +76,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@94bf14ec24 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@ad33f876be (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -266,11 +266,27 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 /* 内容の器: 先頭にボタンの行ぶん(30px)の余白を確保する。 */
 .vz-menu-content { padding-top: 30px; }
 .vz-menu-content-bottom { padding-top: 0; padding-bottom: 30px; }
+/* 畳んだ状態: 内容を隠し、1 行のカードだけを出す。カードのタップで戻す。 */
+.vz-menu-card {
+  position: absolute; left: 4px; right: 40px; top: 4px;
+  display: none; align-items: center;
+  min-height: 30px; padding: 5px 10px;
+  border-radius: 8px; border: 1px solid var(--vz-border);
+  background: var(--vz-surface); color: var(--vz-text);
+  font: inherit; font-size: 12px; text-align: left; cursor: pointer;
+}
+body.vz-collapsed .vz-menu-card { display: inline-flex; }
+body.vz-collapsed .vz-content { display: none; }
+/* 横スワイプの後: その位置からの文字選択を許可する。 */
+body.vz-selecting, body.vz-selecting * {
+  -webkit-user-select: text; user-select: text;
+  -webkit-touch-callout: default;
+}
 .vz-menu-h {
   font-size: .82em; color: var(--vz-dim); font-weight: 500;
   margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .04em;
 }
-.vz-menu-panel > .vz-menu-h:first-child { margin-top: 0; }
+.vz-menu-panel > .vz-menu-h:first-child, .vz-menu-content > .vz-menu-h:first-child { margin-top: 0; }
 .vz-menu-row { display: flex; align-items: center; gap: 6px; margin: 4px 0; flex-wrap: wrap; }
 .vz-menu-label { flex: 1 1 auto; color: var(--vz-dim); font-size: .92em; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .vz-menu-check { display: flex; align-items: center; gap: 6px; font-size: .92em; cursor: pointer; }
@@ -870,71 +886,143 @@ body.vz-longpress, body.vz-longpress * {
     panel.addEventListener('scroll', engage, { passive: true });
     panel.addEventListener('input', engage, { passive: true });
     panel.addEventListener('change', engage, { passive: true });
-    // ── iOS haptics ──
-    // Safari on iOS は JS から haptic を起こせない(navigator.vibrate 非対応)。
-    // Safari 17.4 の switch 入力はトグル時に haptic を鳴らすので、長押しの成立で
-    // その trusted click を起こす。Android は navigator.vibrate で鳴らす。
+    // ── haptics(内製。外部 JS に依存しない) ──
+    // Safari は switch 入力をトグルした瞬間にハプティクスを鳴らす。要求された
+    // duration に応じて数回トグルし、navigator.vibrate を内部で用意する。
+    // Android など本物の navigator.vibrate がある環境はそのまま使う。
     var hapticSwitch = null;
-    function hapticTrigger(el) {
-      if (el === null || typeof window === 'undefined') return;
+    function installHaptics() {
       if (!/iP(hone|ad|od)/.test(navigator.userAgent)) return;
-      if (el.querySelector(':scope > [data-haptic-trigger]') !== null) return;
+      if (document.querySelector('[data-haptic-trigger]') !== null) return;
       var label = document.createElement('label');
       label.setAttribute('data-haptic-trigger', '');
       label.setAttribute('aria-hidden', 'true');
-      var ls = { position: 'absolute', inset: '0', pointerEvents: 'none', touchAction: 'manipulation' };
-      Object.keys(ls).forEach(function (k) { label.style[k] = ls[k]; });
-      label.style.setProperty('-webkit-tap-highlight-color', 'transparent');
-      // スイッチは指の下に置かない(WebKit が touchstart を handled にして
-      // スクロールを止める)。1x1 で隠し、trusted click だけを起こす。
+      label.style.cssText = 'position:absolute;inset:0;pointer-events:none;touch-action:manipulation';
       hapticSwitch = document.createElement('input');
       hapticSwitch.type = 'checkbox';
       hapticSwitch.setAttribute('switch', '');
-      var ss = { position: 'absolute', width: '1px', height: '1px', margin: '0', visibility: 'hidden' };
-      Object.keys(ss).forEach(function (k) { hapticSwitch.style[k] = ss[k]; });
+      hapticSwitch.style.cssText = 'position:absolute;width:1px;height:1px;margin:0;visibility:hidden';
       hapticSwitch.addEventListener('click', function (e) { e.stopPropagation(); });
       label.appendChild(hapticSwitch);
-      if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
-      el.insertAdjacentElement('beforeend', label);
-    }
-    function hapticPulse() {
-      if (typeof navigator.vibrate === 'function' && !/iP(hone|ad|od)/.test(navigator.userAgent)) {
-        navigator.vibrate(10);
-        return;
+      document.body.appendChild(label);
+      if (typeof navigator.vibrate !== 'function') {
+        navigator.vibrate = function (pattern) {
+          var ms = typeof pattern === 'number' ? pattern : 40;
+          var beats = Math.max(1, Math.min(6, Math.round(ms / 18)));
+          for (var i = 0; i < beats; i++) {
+            setTimeout(function () {
+              if (hapticSwitch !== null) hapticSwitch.click();
+            }, i * 22);
+          }
+          return true;
+        };
       }
-      if (hapticSwitch !== null) hapticSwitch.click();
     }
-    function reveal() {
-      // 長押し 1 ジェスチャでメニューまで開く。iOS は Safari の switch で haptic。
-      hapticPulse();
+    function hapticPulse(ms) {
+      try { navigator.vibrate(ms === undefined ? 20 : ms); } catch (e) { /* no vibration */ }
+    }
+    function openMenu() {
       engaged = false;
+      panel.classList.add('vz-menu-open');
       btn.classList.add('vz-menu-open');
       btn.setAttribute('aria-expanded', 'true');
-      panel.classList.add('vz-menu-open');
       build();
       armHide();
     }
+    // 畳んだ 1 行カード。タップで内容を戻す。
+    var card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'vz-menu-card';
+    card.textContent = 'ビジュアル(タップで展開)';
+    card.addEventListener('click', function () {
+      expandContent();
+      hapticPulse(18);
+    });
+    document.body.appendChild(card);
+    var collapsed = false;
+    function collapseContent() {
+      if (collapsed) return;
+      collapsed = true;
+      document.body.classList.add('vz-collapsed');
+      btn.classList.remove('vz-menu-open');
+      if (isOpen()) closeMenu();
+      hapticPulse(24);
+    }
+    function expandContent() {
+      if (!collapsed) return;
+      collapsed = false;
+      document.body.classList.remove('vz-collapsed');
+    }
+    // ── タッチのジェスチャ ──
+    // 長押し(500ms)でハンバーガー、そのまま下へフリックでメニュー展開、
+    // 上へスワイプで畳む、横へスワイプでその位置からの文字選択を許可する。
+    // どの操作の成立でも haptic を鳴らす(展開・畳みのときも)。
     if (coarse) {
-      hapticTrigger(document.body);
-      var pressTimer = null;
-      var hold = function (on) { document.body.classList.toggle('vz-longpress', on); };
+      installHaptics();
+      var HOLD_MS = 500;
+      var SWIPE_MIN = 28;
+      var holdTimer = null;
+      var armed = false;
+      var axis = null;
+      var startX = 0;
+      var startY = 0;
+      var tracking = false;
+      var suppress = function (on) { document.body.classList.toggle('vz-longpress', on); };
       document.addEventListener('pointerdown', function (e) {
-        // メニュー内の押下は長押しの対象外(長押しは領域の内容に対するジェスチャ)。
-        if (panel.contains(e.target) || btn.contains(e.target)) return;
-        hold(true);
-        pressTimer = setTimeout(reveal, 500);
+        if (panel.contains(e.target) || btn.contains(e.target) || card === e.target) return;
+        tracking = true;
+        armed = false;
+        axis = null;
+        startX = e.clientX;
+        startY = e.clientY;
+        suppress(true);
+        holdTimer = setTimeout(function () {
+          holdTimer = null;
+          armed = true;
+          btn.classList.add('vz-menu-open');
+          btn.setAttribute('aria-expanded', 'true');
+          hapticPulse(20);
+        }, HOLD_MS);
       }, { passive: true });
-      document.addEventListener('pointerup', function () { hold(false); if (pressTimer !== null) clearTimeout(pressTimer); }, { passive: true });
-      document.addEventListener('pointercancel', function () { hold(false); if (pressTimer !== null) clearTimeout(pressTimer); }, { passive: true });
       document.addEventListener('pointermove', function (e) {
-        if (pressTimer === null) return;
-        // 指が動いたら長押しの取り消し(スクロールと区別する)。
-        if (e.pointerType === 'touch' && (Math.abs(e.movementX || 0) > 6 || Math.abs(e.movementY || 0) > 6)) {
-          clearTimeout(pressTimer);
+        if (!tracking) return;
+        var dx = e.clientX - startX;
+        var dy = e.clientY - startY;
+        if (axis === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+          axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+          if (holdTimer !== null) {
+            clearTimeout(holdTimer);
+            holdTimer = null;
+          }
+          suppress(false);
+          if (axis === 'x') {
+            // 横スワイプ: 文字選択を許可し、ブラウザの選択に任せる。
+            document.body.classList.add('vz-selecting');
+            hapticPulse(12);
+          }
+        }
+        if (axis === 'y' && armed === true && dy > SWIPE_MIN && !isOpen()) {
+          // 長押しの後の下フリック: メニューを展開する。
+          openMenu();
+          hapticPulse(24);
+        }
+        if (axis === 'y' && armed !== true && dy < -SWIPE_MIN && !collapsed) {
+          // 上スワイプ: 内容を 1 行のカードへ畳む。
+          collapseContent();
+          armed = true;
         }
       }, { passive: true });
+      var endGesture = function () {
+        tracking = false;
+        armed = false;
+        axis = null;
+        suppress(false);
+        document.body.classList.remove('vz-selecting');
+        if (holdTimer !== null) { clearTimeout(holdTimer); holdTimer = null; }
+      };
+      document.addEventListener('pointerup', endGesture, { passive: true });
+      document.addEventListener('pointercancel', endGesture, { passive: true });
     }
-
     // ── ダブルクリックで要素編集(data-editable) ──
     // 原本は保持し、上書きは edits として state に保存、表示は上書き優先。
     document.addEventListener('dblclick', function (e) {
