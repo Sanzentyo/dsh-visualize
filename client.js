@@ -76,7 +76,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@509bcf3771 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@2ae6ca8cfd (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -421,10 +421,12 @@ body.vz-longpress, body.vz-longpress * {
     var body = document.body;
     var menuBtn = document.querySelector('.vz-menu-btn');
     var menuPanel = document.querySelector('.vz-menu-panel');
+    var menuCard = document.querySelector('.vz-menu-card');
     var kids = Array.prototype.slice.call(body.children);
     var target = wrapper();
     kids.forEach(function (kid) {
-      if (kid === menuBtn || kid === menuPanel) return;
+      // メニュー UI と畳みカードは内容の外に残す(内容を隠しても操作できる)。
+      if (kid === menuBtn || kid === menuPanel || kid === menuCard) return;
       target.appendChild(kid);
     });
   });
@@ -445,6 +447,10 @@ body.vz-longpress, body.vz-longpress * {
   (function menu() {
     var root = document.documentElement;
     if (root.getAttribute('data-viz-controls') === 'off') return;
+    // 親ページがメニューを持つ場合(サンドボックスでは trusted な操作が
+    // 作れず haptic が鳴らない)、フレーム側のメニューは作らない。
+    // ただし畳みカードと選択モードはフレーム内の操作なので残す。
+    if (window.__dshVizMenuHosted === true) { installHostedCommands(); return; }
     var pos = root.getAttribute('data-viz-controls-position') || 'top-right';
     var coarse = false;
     try { coarse = matchMedia('(pointer: coarse)').matches; } catch (e) { /* no matchMedia */ }
@@ -959,12 +965,12 @@ body.vz-longpress, body.vz-longpress * {
     // どの操作の成立でも haptic を鳴らす(展開・畳みのときも)。
     if (coarse) {
       installHaptics();
-      // touch イベントで扱う: pointer 系は実機でスクロール開始時に
-      // pointercancel され、長押しやスワイプの判定前に状態が消える。
-      // passive: false にして、自分のジェスチャと判定した後だけ preventDefault する
-      // (スクロールは壊さない)。
+      // touch イベントで扱う(pointer 系はスクロール開始で cancel される)。
+      // 長押し(500ms)の後は **どの方向へスワイプしてもメニューが開く**。
+      // 畳みは「長押しなしの上スワイプ」で、閾値は大きめ(誤爆を防ぐ)。
       var HOLD_MS = 500;
       var SWIPE_MIN = 26;
+      var COLLAPSE_MIN = 64;
       var holdTimer = null;
       var armed = false;
       var axis = null;
@@ -972,11 +978,10 @@ body.vz-longpress, body.vz-longpress * {
       var startY = 0;
       var tracking = false;
       var suppress = function (on) { document.body.classList.toggle('vz-longpress', on); };
-      var ownGesture = false;
+
       function begin(x, y) {
         tracking = true;
         armed = false;
-        ownGesture = false;
         axis = null;
         startX = x;
         startY = y;
@@ -985,13 +990,13 @@ body.vz-longpress, body.vz-longpress * {
         holdTimer = setTimeout(function () {
           holdTimer = null;
           armed = true;
-          ownGesture = true;
-          // 長押しの成立: ハンバーガーを出す(メニューは下フリックで開く)。
+          // 長押しの成立: ハンバーガーを出し、ここからどの方向のスワイプでも開く。
           btn.classList.add('vz-menu-open');
           btn.setAttribute('aria-expanded', 'true');
           hapticPulse(20);
         }, HOLD_MS);
       }
+
       function move(x, y, prevent) {
         if (!tracking) return;
         var dx = x - startX;
@@ -1000,40 +1005,47 @@ body.vz-longpress, body.vz-longpress * {
           axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
           if (holdTimer !== null) { clearTimeout(holdTimer); holdTimer = null; }
           suppress(false);
-          if (axis === 'x') {
-            ownGesture = true;
-            // 横スワイプ: この位置からの文字選択を許可する。
+          if (axis === 'x' && armed !== true) {
+            // 横スワイプ(長押し前): この位置からの文字選択を許可する。
             document.body.classList.add('vz-selecting');
             hapticPulse(12);
             if (prevent !== undefined) prevent();
             return;
           }
         }
-        if (axis === 'y' && armed === true && dy > SWIPE_MIN && !isOpen()) {
-          // 長押しの後、指を離さず下へフリック: メニューを展開する。
-          ownGesture = true;
+        if (axis === null) return;
+        var far = Math.abs(dx) > SWIPE_MIN || Math.abs(dy) > SWIPE_MIN;
+        if (armed === true && far && !isOpen()) {
+          // 長押しの後のスワイプ: 方向を問わずメニューを展開する。
           openMenu();
           hapticPulse(24);
           if (prevent !== undefined) prevent();
+          armed = false;
           return;
         }
-        if (axis === 'y' && armed !== true && dy < -SWIPE_MIN && !collapsed) {
-          // 上スワイプ: 内容を 1 行のカードへ畳む。
-          ownGesture = true;
+        if (armed !== true && axis === 'y' && dy < -COLLAPSE_MIN && !collapsed) {
+          // 長押しなしの上スワイプ: 十分な距離のときだけ 1 行カードへ畳む。
           collapseContent();
-          armed = true;
+          if (prevent !== undefined) prevent();
+          return;
+        }
+        if (armed !== true && axis === 'y' && dy > COLLAPSE_MIN && !isOpen()) {
+          // 長押しなしの下スワイプ: メニューを開く。
+          openMenu();
+          hapticPulse(24);
           if (prevent !== undefined) prevent();
         }
       }
+
       function end() {
         tracking = false;
         armed = false;
         axis = null;
-        ownGesture = false;
         suppress(false);
         document.body.classList.remove('vz-selecting');
         if (holdTimer !== null) { clearTimeout(holdTimer); holdTimer = null; }
       }
+
       document.addEventListener('touchstart', function (e) {
         if (panel.contains(e.target) || btn.contains(e.target) || card === e.target) return;
         var t = e.touches[0];
@@ -1050,7 +1062,6 @@ body.vz-longpress, body.vz-longpress * {
       }, { passive: false });
       document.addEventListener('touchend', end, { passive: true });
       document.addEventListener('touchcancel', end, { passive: true });
-      // マウス(ホバーのある環境)はボタンの hover で足りるので、ここでは扱わない。
     }
     // ── ダブルクリックで要素編集(data-editable) ──
     // 原本は保持し、上書きは edits として state に保存、表示は上書き優先。
@@ -1079,6 +1090,291 @@ body.vz-longpress, body.vz-longpress * {
       });
     });
   })()
+
+  /**
+   * 親ページがメニューを持つときのフレーム側の受け口。
+   * postMessage のコマンドを実行し、畳みカードと選択モードはフレーム内で扱う。
+   */
+  function installHostedCommands() {
+    var charts = function () { return (window.viz && window.viz._charts) || []; };
+    var content = function () { return document.querySelector('.vz-content'); };
+    var tableMode = false;
+    var edits = {};
+
+    function renderTable(c) {
+      var config = c.config || {};
+      var cols = config.columns || [];
+      var rows = config.rows || [];
+      var host = c.host;
+      host.textContent = '';
+      var table = document.createElement('table');
+      table.className = 'table table-sm';
+      var head = document.createElement('thead');
+      var headRow = document.createElement('tr');
+      cols.forEach(function (name) {
+        var th = document.createElement('th');
+        th.textContent = String(name);
+        headRow.appendChild(th);
+      });
+      head.appendChild(headRow);
+      table.appendChild(head);
+      var body = document.createElement('tbody');
+      rows.forEach(function (r) {
+        var tr = document.createElement('tr');
+        cols.forEach(function (_, i) {
+          var td = document.createElement('td');
+          td.textContent = String(r[i]);
+          tr.appendChild(td);
+        });
+        body.appendChild(tr);
+      });
+      table.appendChild(body);
+      host.appendChild(table);
+    }
+
+    function applyView(table) {
+      tableMode = table;
+      charts().forEach(function (c) {
+        if (table) { renderTable(c); return; }
+        c.host.textContent = '';
+        c.update(c.config);
+      });
+    }
+
+    function adjustZoom(percent) {
+      document.documentElement.setAttribute('data-viz-zoom', String(percent / 100));
+      var target = content();
+      if (target !== null) target.style.zoom = String(percent / 100);
+    }
+
+    function overrideColor(key, value) {
+      var target = content();
+      if (target === null) return;
+      target.style.setProperty('--vz-' + key, value);
+    }
+
+    function resetAll() {
+      document.documentElement.removeAttribute('data-viz-zoom');
+      var target = content();
+      if (target !== null) {
+        target.style.removeProperty('--vz-text');
+        target.style.removeProperty('--vz-surface');
+        target.style.removeProperty('--vz-accent');
+        target.style.zoom = '';
+      }
+      window.__dshVizScroll = 'none';
+      applyView(false);
+    }
+
+    function tabular(config, sep) {
+      var cols = config.columns || [];
+      var rows = config.rows || [];
+      var cell = function (value) {
+        var text = String(value);
+        return sep === ',' && text.indexOf(',') >= 0 ? '"' + text + '"' : text;
+      };
+      return [cols.map(cell).join(sep)].concat(rows.map(function (r) {
+        return cols.map(function (_, i) { return cell(r[i]); }).join(sep);
+      })).join('\\n');
+    }
+
+    function toMarkdown(config) {
+      var cols = config.columns || [];
+      var rows = config.rows || [];
+      var head = '| ' + cols.join(' | ') + ' |';
+      var rule = '|' + cols.map(function () { return ' --- '; }).join('|') + '|';
+      var body = rows.map(function (r) {
+        return '| ' + cols.map(function (_, i) { return String(r[i]); }).join(' | ') + ' |';
+      }).join('\\n');
+      return head + '\\n' + rule + '\\n' + body;
+    }
+
+    /** SVG を canvas に描いて dataURL を作る(背景付きは背景を塗る)。 */
+    function svgToDataUrl(svg, mime, background) {
+      var xml = new XMLSerializer().serializeToString(svg);
+      var img = new Image();
+      return new Promise(function (resolve) {
+        img.onload = function () {
+          var canvas = document.createElement('canvas');
+          var box = svg.getBoundingClientRect();
+          canvas.width = Math.max(1, Math.round(box.width));
+          canvas.height = Math.max(1, Math.round(box.height));
+          var ctx = canvas.getContext('2d');
+          if (background !== undefined) {
+            ctx.fillStyle = background;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL(mime));
+        };
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml);
+      });
+    }
+
+    function runExport(command) {
+      var format = command.format;
+      var mime = 'text/plain';
+      var name = 'visualization';
+      var done;
+      if (format === 'chart-png') {
+        var chart = charts()[command.target || 0];
+        if (chart === undefined) return;
+        mime = 'image/png';
+        name = ((chart.config && chart.config.title) || 'chart').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.png';
+        done = svgToDataUrl(chart.host.querySelector('svg'), mime, undefined).then(function (url) { return { url: url }; });
+      } else if (format === 'frame-png' || format === 'frame-jpeg') {
+        var svg = document.querySelector('svg');
+        if (svg === null) return;
+        mime = format === 'frame-png' ? 'image/png' : 'image/jpeg';
+        name = format === 'frame-png' ? 'visualization.png' : 'visualization.jpg';
+        var background = getComputedStyle(document.body).backgroundColor;
+        done = svgToDataUrl(svg, mime, background).then(function (url) { return { url: url }; });
+      } else if (format === 'html') {
+        mime = 'text/html';
+        name = 'visualization.html';
+        done = Promise.resolve({ text: '<!doctype html>\\n' + document.documentElement.outerHTML });
+      } else if (format === 'md') {
+        mime = 'text/markdown';
+        name = 'visualization.md';
+        var lines = [document.body.innerText];
+        charts().forEach(function (c, index) {
+          if (command.includeCharts !== true) return;
+          lines.push('', '## ' + ((c.config && c.config.title) || 'グラフ ' + (index + 1)), '', toMarkdown(c.config), '');
+        });
+        done = Promise.resolve({ text: lines.join('\\n') });
+      } else if (format === 'table') {
+        mime = 'text/tab-separated-values';
+        name = 'visualization.tsv';
+        var first = charts()[command.target || 0];
+        done = Promise.resolve({ text: tabular(first ? first.config : { columns: [], rows: [] }, '\\t') });
+      } else {
+        name = 'visualization.txt';
+        done = Promise.resolve({ text: document.body.innerText });
+      }
+      done.then(function (out) {
+        if (command.mode === 'copy') {
+          parent.postMessage(out.url !== undefined
+            ? { dshVizCopyImage: out.url }
+            : { dshVizCopy: out.text }, '*');
+          return;
+        }
+        parent.postMessage({
+          dshVizDownload: {
+            name: name,
+            url: out.url !== undefined ? out.url
+              : 'data:' + mime + ';charset=utf-8,' + encodeURIComponent(out.text),
+          },
+        }, '*');
+      });
+    }
+
+    // 畳みカード(フレーム内の操作)。
+    var collapsed = false;
+    var card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'vz-menu-card';
+    card.textContent = 'ビジュアル(タップで展開)';
+    card.addEventListener('click', function () {
+      collapsed = false;
+      document.body.classList.remove('vz-collapsed');
+      parent.postMessage({ dshVizHaptic: 18 }, '*');
+    });
+    document.body.appendChild(card);
+
+    // 長押し・スワイプ(畳みと選択モードのみ。メニューは親が持つ)。
+    var HOLD_MS = 500;
+    var COLLAPSE_MIN = 64;
+    var holdTimer = null;
+    var armed = false;
+    var axis = null;
+    var startX = 0;
+    var startY = 0;
+    var tracking = false;
+    var coarse = false;
+    try { coarse = matchMedia('(pointer: coarse)').matches; } catch (e) { /* no matchMedia */ }
+    if (coarse) {
+      document.addEventListener('touchstart', function (e) {
+        if (card === e.target) return;
+        var t = e.touches[0];
+        if (t === undefined) return;
+        tracking = true;
+        armed = false;
+        axis = null;
+        startX = t.clientX;
+        startY = t.clientY;
+        document.body.classList.add('vz-longpress');
+        if (holdTimer !== null) clearTimeout(holdTimer);
+        holdTimer = setTimeout(function () {
+          holdTimer = null;
+          armed = true;
+          // 長押しの成立を親へ告げる(親がハンバーガーを出して haptic を鳴らす)。
+          parent.postMessage({ dshVizHold: true }, '*');
+        }, HOLD_MS);
+      }, { passive: true });
+      document.addEventListener('touchmove', function (e) {
+        if (!tracking) return;
+        var t = e.touches[0];
+        if (t === undefined) return;
+        var dx = t.clientX - startX;
+        var dy = t.clientY - startY;
+        if (axis === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+          axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+          if (holdTimer !== null) { clearTimeout(holdTimer); holdTimer = null; }
+          document.body.classList.remove('vz-longpress');
+          if (axis === 'x' && armed !== true) {
+            document.body.classList.add('vz-selecting');
+            parent.postMessage({ dshVizHaptic: 12 }, '*');
+          }
+        }
+        if (axis === null) return;
+        if (armed === true && (Math.abs(dx) > 26 || Math.abs(dy) > 26)) {
+          parent.postMessage({ dshVizOpenMenu: true }, '*');
+          armed = false;
+          if (e.cancelable) e.preventDefault();
+          return;
+        }
+        if (armed !== true && axis === 'y' && dy < -COLLAPSE_MIN && !collapsed) {
+          collapsed = true;
+          document.body.classList.add('vz-collapsed');
+          parent.postMessage({ dshVizHaptic: 24 }, '*');
+          if (e.cancelable) e.preventDefault();
+        }
+      }, { passive: false });
+      var end = function () {
+        tracking = false;
+        armed = false;
+        axis = null;
+        document.body.classList.remove('vz-longpress');
+        document.body.classList.remove('vz-selecting');
+        if (holdTimer !== null) { clearTimeout(holdTimer); holdTimer = null; }
+      };
+      document.addEventListener('touchend', end, { passive: true });
+      document.addEventListener('touchcancel', end, { passive: true });
+    }
+
+    // 親からのコマンド。
+    window.addEventListener('message', function (event) {
+      var data = event.data;
+      if (data === null || typeof data !== 'object') return;
+      if (data.vizCommand === undefined) return;
+      var command = data.vizCommand;
+      if (command.type === 'view') applyView(command.table === true);
+      else if (command.type === 'zoom') adjustZoom(command.value);
+      else if (command.type === 'color') overrideColor(command.key, command.value);
+      else if (command.type === 'reset') resetAll();
+      else if (command.type === 'scroll') { window.__dshVizScroll = command.value; fit(); }
+      else if (command.type === 'export') runExport(command);
+    });
+
+    // 親へグラフの一覧を知らせる(対象グラフのプルダウン用)。
+    addEventListener('load', function () {
+      parent.postMessage({
+        dshVizMeta: charts().map(function (c, index) {
+          return (c.config && c.config.title) || 'グラフ ' + (index + 1);
+        }),
+      }, '*');
+    });
+  }
 })()`
     const FRAME_CHART = `
 (function () {
