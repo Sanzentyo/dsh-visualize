@@ -76,7 +76,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@69d0d6bfb1 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@94bf14ec24 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -716,8 +716,13 @@ body.vz-longpress, body.vz-longpress * {
             }
             done.then(function (out) {
               if (modeSwitch.checked !== true) {
-                var payload = out.url !== undefined ? out.url : out.text;
-                parent.postMessage({ dshVizCopy: payload }, '*');
+                // コピー: 画像は base64 の羅列ではなく image/png として
+                // クリップボードへ置く(親が ClipboardItem で書く)。
+                if (out.url !== undefined) {
+                  parent.postMessage({ dshVizCopyImage: out.url }, '*');
+                } else {
+                  parent.postMessage({ dshVizCopy: out.text }, '*');
+                }
               } else {
                 var url = out.url !== undefined
                   ? out.url
@@ -2259,6 +2264,32 @@ body { padding: 14px 16px 16px; }`
     }
 
     /**
+     * Write text to the clipboard.
+     * @param text - the payload.
+     * @returns a promise that settles when the write completes.
+     */
+    function copyToClipboard(text) {
+      return navigator.clipboard?.writeText(text) ?? Promise.reject(new Error('no clipboard'))
+    }
+
+    /**
+     * Write an image to the clipboard as `image/png`.
+     *
+     * A data URL pasted as text gives the reader a wall of base64, which is
+     * useless as an image — the point of Copy for an image format is a bitmap
+     * on the clipboard. `ClipboardItem` takes the blob directly.
+     * @param dataUrl - a `data:image/png;base64,…` URL.
+     * @returns a promise that settles when the write completes.
+     */
+    async function copyImage(dataUrl) {
+      if (typeof ClipboardItem === 'undefined' || navigator.clipboard?.write === undefined) {
+        throw new Error('image clipboard unsupported')
+      }
+      const blob = await (await fetch(dataUrl)).blob()
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+    }
+
+    /**
      * Relay what a visualization reports to the host.
      *
      * The frame cannot reach the host itself (opaque origin), so it posts to
@@ -2288,7 +2319,13 @@ body { padding: 14px 16px 16px; }`
         // The frame cannot reach the clipboard or trigger a download (opaque
         // origin, no allow-downloads), so it posts and this window acts.
         if (typeof data.dshVizCopy === 'string' && data.dshVizCopy !== '') {
-          void navigator.clipboard?.writeText(data.dshVizCopy).catch(() => {})
+          void copyToClipboard(data.dshVizCopy).catch(() => {})
+          return
+        }
+        if (data.dshVizCopyImage !== undefined && data.dshVizCopyImage !== null) {
+          // 画像はテキストとしてではなく、クリップボードの image/png として置く。
+          // dataURL をそのまま文字列コピーすると base64 の羅列になる(実測で指摘)。
+          void copyImage(data.dshVizCopyImage).catch(() => {})
           return
         }
         if (data.dshVizDownload !== null && typeof data.dshVizDownload === 'object') {
