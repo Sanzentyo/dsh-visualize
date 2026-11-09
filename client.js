@@ -76,7 +76,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@581f2e4c95 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@594c50b113 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -1036,23 +1036,39 @@ body.vz-longpress, body.vz-longpress * {
       document.documentElement.setAttribute('data-viz-zoom', String(percent / 100));
       var target = content();
       if (target !== null) target.style.zoom = String(percent / 100);
+      // ズーム後は計測幅が変わるので描き直す(古い幅のままだと棒が崩れる)。
+      charts().forEach(function (c) { c.update(c.config); });
     }
 
+    /**
+     * 色の上書き。viz.chart は documentElement の computed style から --vz-* を
+     * 読むので、ルートに設定する(メニューはフレームの外なので内容にしか効かない)。
+     */
     function overrideColor(key, value) {
-      var target = content();
-      if (target === null) return;
-      target.style.setProperty('--vz-' + key, value);
+      document.documentElement.style.setProperty('--vz-' + key, value);
+      charts().forEach(function (c) { c.update(c.config); });
+    }
+
+    /** 文字の上書き: フォントファミリと基本サイズ。 */
+    function overrideFont(family, sizePx) {
+      var root = document.documentElement;
+      if (family !== undefined && family !== '') root.style.setProperty('--vz-font', family);
+      if (sizePx !== undefined && sizePx > 0) root.style.setProperty('--vz-font-size', sizePx + 'px');
+      charts().forEach(function (c) { c.update(c.config); });
     }
 
     function resetAll() {
-      document.documentElement.removeAttribute('data-viz-zoom');
+      var root = document.documentElement;
+      root.removeAttribute('data-viz-zoom');
+      root.style.removeProperty('--vz-text');
+      root.style.removeProperty('--vz-dim');
+      root.style.removeProperty('--vz-surface');
+      root.style.removeProperty('--vz-accent');
+      root.style.removeProperty('--vz-border');
+      root.style.removeProperty('--vz-font');
+      root.style.removeProperty('--vz-font-size');
       var target = content();
-      if (target !== null) {
-        target.style.removeProperty('--vz-text');
-        target.style.removeProperty('--vz-surface');
-        target.style.removeProperty('--vz-accent');
-        target.style.zoom = '';
-      }
+      if (target !== null) target.style.zoom = '';
       window.__dshVizScroll = 'none';
       applyView(false);
     }
@@ -1200,6 +1216,7 @@ body.vz-longpress, body.vz-longpress * {
       if (command.type === 'view') applyView(command.table === true);
       else if (command.type === 'zoom') adjustZoom(command.value);
       else if (command.type === 'color') overrideColor(command.key, command.value);
+      else if (command.type === 'font') overrideFont(command.family, command.size);
       else if (command.type === 'reset') resetAll();
       else if (command.type === 'scroll') { window.__dshVizScroll = command.value; fit(); }
       else if (command.type === 'export') runExport(command);
@@ -2036,7 +2053,78 @@ body { padding: 14px 16px 16px; }`
 
     /** The script runtime in document order, ready to inline before a fragment. */
     const FRAME_SCRIPT = FRAME_RUNTIME + ';\n' + FRAME_CHART
-    // </generated:frame-runtime>\n    // </generated:frame-runtime>
+    // </generated:frame-runtime>
+    /**
+     * フレームの外に置くメニューのスタイル(プラグイン側の持ち物)。
+     * 色は Harness のトークン(--dsw-alias-*)を継承し、ダーク/ライトに追従する。
+     */
+    const FRAME_MENU_CSS = `
+.vz-fm-btn {
+  position: absolute; z-index: 30; top: 4px; right: 4px;
+  width: 30px; height: 30px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 7px; border: 1px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary-dimmed);
+  cursor: pointer; opacity: 0; transition: opacity .16s ease; font: inherit;
+}
+.vz-fm-frame:hover .vz-fm-btn, .vz-fm-btn[data-open="true"], .vz-fm-btn:focus-visible { opacity: 1; }
+.vz-fm-haptic { position: absolute; inset: -8px; cursor: pointer; }
+.vz-fm-switch { position: absolute; width: 1px; height: 1px; margin: 0; visibility: hidden; pointer-events: none; }
+.vz-fm-panel {
+  position: absolute; z-index: 31; top: 4px; right: 4px;
+  width: 268px; max-width: calc(100% - 8px); max-height: min(72vh, calc(100% - 8px));
+  box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain;
+  padding: 40px 12px 10px; border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary);
+  border: 1px solid var(--dsw-alias-border-l1);
+  box-shadow: 0 8px 24px rgb(0 0 0 / .22);
+  font-size: 13px; line-height: 1.45;
+  display: none; transform-origin: top right;
+}
+.vz-fm-panel[data-open="true"] { display: block; }
+/* 折り畳み見出し: タップで開閉する。 */
+.vz-fm-h {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  padding: 8px 2px; margin: 0;
+  border: 0; border-top: 1px solid var(--dsw-alias-border-l1);
+  background: transparent; color: var(--dsw-alias-label-primary);
+  font: inherit; font-size: .93em; font-weight: 600; text-align: left; cursor: pointer;
+}
+.vz-fm-h:first-of-type { border-top: 0; }
+.vz-fm-h::after {
+  content: ''; margin-left: auto; width: 0; height: 0;
+  border-left: 4px solid transparent; border-right: 4px solid transparent;
+  border-top: 5px solid currentColor; opacity: .7;
+  transition: transform .16s ease;
+}
+.vz-fm-h[aria-expanded="true"]::after { transform: rotate(180deg); }
+.vz-fm-body { padding: 2px 0 8px 10px; }
+.vz-fm-row { display: flex; align-items: center; gap: 6px; margin: 4px 0; flex-wrap: wrap; }
+.vz-fm-row > select, .vz-fm-row > input[type="range"] { flex: 1 1 auto; min-width: 0; }
+.vz-fm-row > input[type="range"] { accent-color: var(--dsw-alias-brand-primary); }
+.vz-fm-label { flex: 0 0 auto; color: var(--dsw-alias-label-primary-dimmed); font-size: .9em; }
+.vz-fm-s {
+  min-height: 34px; padding: 4px 10px; border-radius: 7px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  background: transparent; color: inherit; font: inherit; font-size: .9em; cursor: pointer;
+}
+.vz-fm-sw {
+  appearance: none; -webkit-appearance: none; flex: 0 0 auto;
+  width: 38px; height: 22px; margin: 0; border-radius: 999px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-border-l1); position: relative; cursor: pointer;
+  transition: background .16s ease;
+}
+.vz-fm-sw::after {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--dsw-alias-bg-layer-1); transition: transform .16s ease;
+}
+.vz-fm-sw:checked { background: var(--dsw-alias-brand-primary); border-color: var(--dsw-alias-brand-primary); }
+.vz-fm-sw:checked::after { transform: translateX(16px); }
+.vz-fm-check { display: flex; align-items: center; gap: 6px; font-size: .9em; cursor: pointer; }
+`
+
 
     /**
      * Host tokens copied into every frame.
@@ -2293,6 +2381,356 @@ body { padding: 14px 16px 16px; }`
     }
 
     /**
+     * フレームの外にメニューを組み立てる(素の DOM。React は使わない)。
+     *
+     * サンドボックス iframe の中では trusted な操作が作れないため、iOS の
+     * switch ハプティクスは親ページでしか鳴らない。ハンバーガー・パネル・
+     * switch をここ(フレームの親)に置き、postMessage でフレームを操作する。
+     *
+     * @param outer - メニューを載せる要素(フレームのすぐ外側)。
+     * @param send - フレームへコマンドを送る関数。
+     * @returns メニューの API と破棄関数。
+     */
+    function mountFrameMenu(outer, send) {
+      var state = { charts: [], zoom: 100, tableMode: false, collapsed: false }
+      var ios = /iP(hone|ad|od)/.test(navigator.userAgent)
+      var coarse = false
+      try { coarse = matchMedia('(pointer: coarse)').matches } catch (e) { /* no matchMedia */ }
+
+      /** ハプティクス: iOS は switch の trusted click、他は navigator.vibrate。 */
+      function haptic(ms) {
+        if (ios && switchEl !== null) {
+          try { switchEl.click() } catch (e) { /* no haptic */ }
+          return
+        }
+        try { navigator.vibrate(ms === undefined ? 14 : ms) } catch (e) { /* no vibration */ }
+      }
+
+      function el(tag, cls, text) {
+        var node = document.createElement(tag)
+        if (cls !== undefined) node.className = cls
+        if (text !== undefined) node.textContent = text
+        return node
+      }
+
+      // ハンバーガー(右上)。
+      var btn = el('button', 'vz-fm-btn')
+      btn.type = 'button'
+      btn.setAttribute('aria-label', '表示メニュー')
+      btn.setAttribute('aria-expanded', 'false')
+      btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">'
+        + '<path d="M2.5 4.5h13M2.5 9h13M2.5 13.5h13" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>'
+
+      // iOS: ボタンの上に label + hidden switch。指のタップが trusted なトグルになる。
+      var switchEl = null
+      if (ios) {
+        var label = el('label', 'vz-fm-haptic')
+        label.setAttribute('aria-hidden', 'true')
+        switchEl = el('input', 'vz-fm-switch')
+        switchEl.type = 'checkbox'
+        switchEl.setAttribute('switch', '')
+        switchEl.addEventListener('click', function (event) { event.stopPropagation() })
+        label.appendChild(switchEl)
+        btn.appendChild(label)
+      }
+
+      // パネル。中身は build() が組み立てる。
+      var panel = el('div', 'vz-fm-panel')
+      panel.setAttribute('data-open', 'false')
+
+      outer.appendChild(btn)
+      outer.appendChild(panel)
+
+      var open = false
+      function setOpen(next) {
+        open = next
+        panel.setAttribute('data-open', next ? 'true' : 'false')
+        btn.setAttribute('data-open', next ? 'true' : 'false')
+        btn.setAttribute('aria-expanded', next ? 'true' : 'false')
+        if (next) build()
+        if (next) haptic(14)
+      }
+
+      function row() { var r = el('div', 'vz-fm-row'); panel.appendChild(r); return r }
+      function head(text) { panel.appendChild(el('div', 'vz-fm-h', text)) }
+      function small(text, onClick) {
+        var b = el('button', 'vz-fm-s', text)
+        b.type = 'button'
+        b.addEventListener('click', onClick)
+        return b
+      }
+
+      var FORMATS = [
+        ['chart-png', 'グラフ(透過 PNG)'],
+        ['frame-png', '画像(PNG 背景付き)'],
+        ['frame-jpeg', '画像(JPEG 背景付き)'],
+        ['text', 'text'],
+        ['html', 'html'],
+        ['md', 'md'],
+        ['table', '表(TSV)'],
+      ]
+
+      /** 折り畳みセクションの開閉状態(既定は閉)。 */
+      var opened = {}
+      /** 文字設定。 */
+      var font = { family: '', size: 0 }
+
+      /** 見出しをタップで開閉するセクションを作る。@returns 中身を入れる要素。 */
+      function section(title, key) {
+        var body = el('div', 'vz-fm-body')
+        body.style.display = opened[key] === true ? 'block' : 'none'
+        var header = el('button', 'vz-fm-h', title)
+        header.type = 'button'
+        header.setAttribute('aria-expanded', opened[key] === true ? 'true' : 'false')
+        header.addEventListener('click', function () {
+          opened[key] = opened[key] !== true
+          body.style.display = opened[key] === true ? 'block' : 'none'
+          header.setAttribute('aria-expanded', opened[key] === true ? 'true' : 'false')
+          haptic(12)
+        })
+        panel.appendChild(header)
+        panel.appendChild(body)
+        return body
+      }
+
+      /** 使われている要素だけをプルダウンに並べる(色は内容側の CSS 変数)。 */
+      var COLORS = [
+        ['text', '本文の色'],
+        ['dim', '補助文字の色'],
+        ['surface', '面の色'],
+        ['accent', '強調の色'],
+        ['border', '枠線の色'],
+      ]
+      var FONTS = [
+        ['', '既定(ハーネス)'],
+        ['system-ui, sans-serif', 'システム'],
+        ['-apple-system, BlinkMacSystemFont, sans-serif', 'Apple'],
+        ['"Hiragino Kaku Gothic ProN", sans-serif', 'ヒラギノ'],
+        ['ui-monospace, monospace', '等幅'],
+        ['serif', 'セリフ'],
+      ]
+
+      function build() {
+        panel.textContent = ''
+
+        // 表示: グラフ / 表
+        var viewBody = section('表示', 'view')
+        var viewRow = el('div', 'vz-fm-row')
+        viewRow.appendChild(small(state.tableMode ? 'グラフ' : 'グラフ ✓', function () {
+          state.tableMode = false
+          send({ type: 'view', table: false })
+          build()
+        }))
+        viewRow.appendChild(small(state.tableMode ? '表 ✓' : '表', function () {
+          state.tableMode = true
+          send({ type: 'view', table: true })
+          build()
+        }))
+        viewBody.appendChild(viewRow)
+
+        // コピー / ダウンロード(公式プルダウン + COPY/DL + 実行)
+        if (!state.tableMode) {
+          var exportBody = section('コピー / ダウンロード', 'export')
+          var formatRow = el('div', 'vz-fm-row')
+          var format = el('select', 'vz-fm-select')
+          FORMATS.forEach(function (pair) {
+            var option = el('option', undefined, pair[1])
+            option.value = pair[0]
+            format.appendChild(option)
+          })
+          formatRow.appendChild(format)
+          exportBody.appendChild(formatRow)
+
+          var targetRow = el('div', 'vz-fm-row')
+          var target = el('select', 'vz-fm-select')
+          targetRow.appendChild(target)
+          function syncTarget() {
+            var isChart = format.value === 'chart-png'
+            targetRow.style.display = isChart && state.charts.length > 1 ? 'flex' : 'none'
+            if (!isChart) return
+            target.textContent = ''
+            state.charts.forEach(function (title, index) {
+              var option = el('option', undefined, title)
+              option.value = String(index)
+              target.appendChild(option)
+            })
+          }
+          format.addEventListener('change', syncTarget)
+          syncTarget()
+          exportBody.appendChild(targetRow)
+
+          var modeRow = el('div', 'vz-fm-row')
+          var modeLabel = el('span', 'vz-fm-label', 'COPY')
+          var modeSwitch = el('input', 'vz-fm-sw')
+          modeSwitch.type = 'checkbox'
+          modeSwitch.setAttribute('role', 'switch')
+          modeSwitch.setAttribute('aria-label', 'COPY と DL の切り替え')
+          modeSwitch.addEventListener('change', function () {
+            modeLabel.textContent = modeSwitch.checked ? 'DL' : 'COPY'
+          })
+          modeRow.appendChild(modeLabel)
+          modeRow.appendChild(modeSwitch)
+          exportBody.appendChild(modeRow)
+
+          var includeRow = el('div', 'vz-fm-row')
+          var include = el('input')
+          include.type = 'checkbox'
+          include.checked = true
+          var includeLabel = el('label', 'vz-fm-check')
+          includeLabel.appendChild(include)
+          includeLabel.appendChild(document.createTextNode('md にグラフを含む'))
+          includeRow.appendChild(includeLabel)
+          exportBody.appendChild(includeRow)
+
+          var goRow = el('div', 'vz-fm-row')
+          goRow.appendChild(small('実行', function () {
+            haptic(16)
+            send({
+              type: 'export',
+              format: format.value,
+              mode: modeSwitch.checked ? 'dl' : 'copy',
+              target: Number(target.value) || 0,
+              includeCharts: include.checked,
+            })
+          }))
+          exportBody.appendChild(goRow)
+        }
+
+        // 拡大率
+        var zoomBody = section('拡大率', 'zoom')
+        var zoomRow = el('div', 'vz-fm-row')
+        var zoom = el('input')
+        zoom.type = 'range'
+        zoom.min = '50'
+        zoom.max = '200'
+        zoom.step = '5'
+        zoom.value = String(state.zoom)
+        var zoomLabel = el('span', 'vz-fm-label', state.zoom + '%')
+        zoom.addEventListener('input', function () {
+          state.zoom = Number(zoom.value)
+          zoomLabel.textContent = state.zoom + '%'
+          send({ type: 'zoom', value: state.zoom })
+        })
+        zoomRow.appendChild(zoom)
+        zoomRow.appendChild(zoomLabel)
+        zoomBody.appendChild(zoomRow)
+
+        // 文字: フォントとサイズ
+        var textBody = section('文字', 'text')
+        var fontRow = el('div', 'vz-fm-row')
+        var fontLabel = el('span', 'vz-fm-label', 'フォント')
+        var fontSelect = el('select', 'vz-fm-select')
+        FONTS.forEach(function (pair) {
+          var option = el('option', undefined, pair[1])
+          option.value = pair[0]
+          if (font.family === pair[0]) option.selected = true
+          fontSelect.appendChild(option)
+        })
+        fontSelect.addEventListener('change', function () {
+          font.family = fontSelect.value
+          send({ type: 'font', family: font.family, size: font.size })
+        })
+        fontRow.appendChild(fontLabel)
+        fontRow.appendChild(fontSelect)
+        textBody.appendChild(fontRow)
+
+        var sizeRow = el('div', 'vz-fm-row')
+        var sizeLabel = el('span', 'vz-fm-label', '基本サイズ')
+        var size = el('input')
+        size.type = 'range'
+        size.min = '10'
+        size.max = '24'
+        size.step = '1'
+        size.value = String(font.size === 0 ? 14 : font.size)
+        var sizeValue = el('span', 'vz-fm-label', size.value + 'px')
+        size.addEventListener('input', function () {
+          font.size = Number(size.value)
+          sizeValue.textContent = font.size + 'px'
+          send({ type: 'font', family: font.family, size: font.size })
+        })
+        sizeRow.appendChild(sizeLabel)
+        sizeRow.appendChild(size)
+        sizeRow.appendChild(sizeValue)
+        textBody.appendChild(sizeRow)
+
+        // 色: 使われている要素だけをプルダウンで選び、色を決める
+        var colorBody = section('色', 'color')
+        var colorRow = el('div', 'vz-fm-row')
+        var colorTarget = el('select', 'vz-fm-select')
+        COLORS.forEach(function (pair) {
+          var option = el('option', undefined, pair[1])
+          option.value = pair[0]
+          colorTarget.appendChild(option)
+        })
+        var colorInput = el('input')
+        colorInput.type = 'color'
+        colorInput.value = '#000000'
+        colorInput.addEventListener('input', function () {
+          send({ type: 'color', key: colorTarget.value, value: colorInput.value })
+        })
+        colorRow.appendChild(colorTarget)
+        colorRow.appendChild(colorInput)
+        colorBody.appendChild(colorRow)
+
+        // リセット
+        var resetBody = section('リセット', 'reset')
+        var resetRow = el('div', 'vz-fm-row')
+        resetRow.appendChild(small('デフォルトに戻す', function () {
+          state.tableMode = false
+          state.zoom = 100
+          font.family = ''
+          font.size = 0
+          send({ type: 'reset' })
+          build()
+        }))
+        resetBody.appendChild(resetRow)
+
+        // スクロール
+        var scrollBody = section('スクロール', 'scroll')
+        var scrollRow = el('div', 'vz-fm-row')
+        var scroll = el('select', 'vz-fm-select')
+        ;['none', 'x', 'y', 'both'].forEach(function (mode) {
+          var option = el('option', undefined, mode)
+          option.value = mode
+          scroll.appendChild(option)
+        })
+        scroll.addEventListener('change', function () {
+          send({ type: 'scroll', value: scroll.value })
+        })
+        scrollRow.appendChild(scroll)
+        scrollBody.appendChild(scrollRow)
+      }
+
+      btn.addEventListener('click', function (event) {
+        event.stopPropagation()
+        setOpen(!open)
+      })
+      // 外側クリックで閉じる(パネル内の操作では閉じない)。
+      document.addEventListener('pointerdown', function (event) {
+        if (!open) return
+        if (panel.contains(event.target) || btn.contains(event.target)) return
+        setOpen(false)
+      }, { passive: true })
+      panel.addEventListener('pointerdown', function (event) { event.stopPropagation() }, { passive: true })
+
+      // タッチ: フレームが長押しを検出したら dshVizHold で知らせてくる。
+      // ここでは何もしない(受け口は VisualizeView の message ハンドラ)。
+
+      return {
+        setOpen: setOpen,
+        setMeta: function (charts) {
+          state.charts = charts
+          if (open) build()
+        },
+        haptic: haptic,
+        destroy: function () {
+          if (btn.parentNode !== null) btn.parentNode.removeChild(btn)
+          if (panel.parentNode !== null) panel.parentNode.removeChild(panel)
+        },
+      }
+    }
+
+    /**
      * One visualization: a disclosure header over a sandboxed frame.
      * @param props - the Tool view props supplied by the Tool layer.
      */
@@ -2308,6 +2746,10 @@ body { padding: 14px 16px 16px; }`
       const [height, setHeight] = React.useState(undefined)
       const nonce = React.useMemo(() => Math.random().toString(36).slice(2), [])
       const frameRef = React.useRef(null)
+      // フレームの外に置くメニュー(ハンバーガー・haptic)と、その載せ先。
+      const menuApi = React.useRef(null)
+      const outerRef = React.useRef(null)
+      const payloadPath = payload === undefined ? '' : payload.path
 
       React.useEffect(() => {
         if (payload === undefined) return undefined
@@ -2348,10 +2790,50 @@ body { padding: 14px 16px 16px; }`
           if (typeof data.height === 'number' && data.height > 0) {
             setHeight(Math.min(1200, Math.ceil(data.height)))
           }
+          // フレームの長押し → 親メニューを開く(ハプティクスも鳴らす)。
+          if (data.dshVizHold === true) {
+            if (menuApi.current !== null) menuApi.current.setOpen(true)
+            return
+          }
+          if (typeof data.dshVizHaptic === 'number') {
+            if (menuApi.current !== null) menuApi.current.haptic(data.dshVizHaptic)
+            return
+          }
+          if (Array.isArray(data.dshVizMeta)) {
+            if (menuApi.current !== null) menuApi.current.setMeta(data.dshVizMeta)
+            return
+          }
         }
         window.addEventListener('message', onMessage)
         return () => window.removeEventListener('message', onMessage)
       }, [nonce])
+
+      // メニューはフレームの外(この枠の中)に素の DOM で載せる。
+      // サンドボックス iframe では trusted な操作が作れず、iOS の haptic が
+      // 鳴らないため、ハンバーガーと switch は親ページ側に置く。
+      React.useEffect(() => {
+        if (phase !== 'result' || payload === undefined) return undefined
+        const outer = outerRef.current
+        if (outer === null) return undefined
+        // メニューの CSS を親ドキュメントへ一度だけ注入する。
+        const styleId = 'dsh-viz-frame-menu-css'
+        if (document.getElementById(styleId) === null) {
+          const style = document.createElement('style')
+          style.id = styleId
+          style.textContent = FRAME_MENU_CSS
+          document.head.appendChild(style)
+        }
+        const api = mountFrameMenu(outer, command => {
+          const frame = frameRef.current
+          if (frame === null) return
+          frame.contentWindow?.postMessage({ vizCommand: command }, '*')
+        })
+        menuApi.current = api
+        return () => {
+          menuApi.current = null
+          api.destroy()
+        }
+      }, [phase, payloadPath, revision])
 
       if (phase !== 'result' || payload === undefined) {
         // Preparing / running, or a result we do not own: stay out of the way.
@@ -2377,6 +2859,7 @@ body { padding: 14px 16px 16px; }`
           + `<script>window.__dshVizSession=${JSON.stringify(sessionOf(payload.path) ?? '')}</script>`
           + `<script>window.__dshVizState=${JSON.stringify(restored ?? null)}</script>`
           + `<script>window.__dshVizScroll=${JSON.stringify(scroll)}</script>`
+          + `<script>window.__dshVizMenuHosted=true</script>`
           + `<script>${FRAME_SCRIPT}</script>`
           + html + heightReporter(nonce) + `</body></html>`
 
@@ -2468,7 +2951,10 @@ body { padding: 14px 16px 16px; }`
         // 縮めて中央に置く。
         return h('div', {
           'data-dsh-visualize': payload.title,
+          ref: outerRef,
+          className: 'vz-fm-frame',
           style: {
+            position: 'relative',
             margin: widthPx === undefined ? '10px 0' : '10px auto',
             maxWidth: widthPx === undefined ? '100%' : `${widthPx}px`,
             color: 'var(--dsw-alias-label-primary)',
@@ -2478,12 +2964,15 @@ body { padding: 14px 16px 16px; }`
 
       return h('div', {
         'data-dsh-visualize': payload.title,
+        ref: outerRef,
+        className: 'vz-fm-frame',
         style: {
+          position: 'relative',
+          // overflow を切るとメニューがはみ出して消えるので、この枠では切らない。
           margin: widthPx === undefined ? '10px 0' : '10px auto',
           maxWidth: widthPx === undefined ? '100%' : `${widthPx}px`,
           border: '1px solid var(--dsw-alias-border-l1)',
           borderRadius: '12px',
-          overflow: 'hidden',
           background: 'var(--dsw-alias-bg-layer-1)',
           color: 'var(--dsw-alias-label-primary)',
         },
