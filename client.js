@@ -76,7 +76,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@e74d8e4f68 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@69d0d6bfb1 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -237,9 +237,9 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
   max-height: min(70vh, calc(100% - 8px)); overflow-y: auto; overscroll-behavior: contain;
   /* border-box でないと max-height が padding を含まず、領域より高くなる。 */
   box-sizing: border-box;
-  /* 上端はボタンと揃える: ハンバーガーがパネルの右上コーナーに内蔵されて
-     一体に見える。内容はボタンの下から始める。 */
-  padding: 38px 12px 10px;
+  /* 上端はボタンと揃える: ハンバーガーがパネルの右上コーナーに内蔵され、
+     一体のヘッダー行になる。内容はボタンの行(30px)の下から始める。 */
+  padding: 4px 12px 10px 12px;
   border-radius: 10px;
   background: var(--vz-surface); color: var(--vz-text);
   border: 1px solid var(--vz-border);
@@ -252,16 +252,20 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 .vz-menu-panel.vz-menu-open {
   transform: scale(1); opacity: 1; pointer-events: auto;
 }
-/* 下側の位置では下端起点で上へ展開する(padding も下側へ反転)。 */
+/* 下側の位置では下端起点で上へ展開する(ボタンの行は下端に来る)。 */
 .vz-menu-panel.vz-menu-bottom-right, .vz-menu-panel.vz-menu-bottom-left {
-  padding: 10px 12px 42px;
+  padding: 10px 12px 4px 12px;
 }
-/* 位置は四隅。パネルはボタンと同じ上端に置き、ハンバーガーを右上に内蔵する
-   (パネル側の padding-top がボタンの居場所)。下側の位置では下端起点で上へ展開。 */
+/* 位置は四隅。パネルはボタンと同じ上端に置き、ハンバーガーを右上に内蔵する。
+   内容はボタンの行(30px)を避けるため、内容側の先頭に余白を置く。
+   下側の位置では下端起点で上へ展開する。 */
 .vz-menu-panel.vz-menu-top-right { top: 4px; right: 4px; transform-origin: top right; }
 .vz-menu-panel.vz-menu-top-left { top: 4px; left: 4px; transform-origin: top left; }
 .vz-menu-panel.vz-menu-bottom-right { top: auto; bottom: 4px; right: 4px; transform-origin: bottom right; }
 .vz-menu-panel.vz-menu-bottom-left { top: auto; bottom: 4px; left: 4px; transform-origin: bottom left; }
+/* 内容の器: 先頭にボタンの行ぶん(30px)の余白を確保する。 */
+.vz-menu-content { padding-top: 30px; }
+.vz-menu-content-bottom { padding-top: 0; padding-bottom: 30px; }
 .vz-menu-h {
   font-size: .82em; color: var(--vz-dim); font-weight: 500;
   margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .04em;
@@ -441,6 +445,10 @@ body.vz-longpress, body.vz-longpress * {
     panel.className = 'vz-menu-panel vz-menu-' + pos;
     // パネルの内容だけを build() が差し替える(閉じるボタンは廃止: ハンバーガーがトグル)。
     var content = document.createElement('div');
+    // 先頭の余白はボタンの行(30px)を確保する。下側の位置では下端へ回す。
+    content.className = pos === 'bottom-right' || pos === 'bottom-left'
+      ? 'vz-menu-content-bottom'
+      : 'vz-menu-content';
     panel.appendChild(content);
 
     function section(title) {
