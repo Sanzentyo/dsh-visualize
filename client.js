@@ -76,7 +76,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@ad33f876be (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@509bcf3771 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -959,8 +959,12 @@ body.vz-longpress, body.vz-longpress * {
     // どの操作の成立でも haptic を鳴らす(展開・畳みのときも)。
     if (coarse) {
       installHaptics();
+      // touch イベントで扱う: pointer 系は実機でスクロール開始時に
+      // pointercancel され、長押しやスワイプの判定前に状態が消える。
+      // passive: false にして、自分のジェスチャと判定した後だけ preventDefault する
+      // (スクロールは壊さない)。
       var HOLD_MS = 500;
-      var SWIPE_MIN = 28;
+      var SWIPE_MIN = 26;
       var holdTimer = null;
       var armed = false;
       var axis = null;
@@ -968,60 +972,85 @@ body.vz-longpress, body.vz-longpress * {
       var startY = 0;
       var tracking = false;
       var suppress = function (on) { document.body.classList.toggle('vz-longpress', on); };
-      document.addEventListener('pointerdown', function (e) {
-        if (panel.contains(e.target) || btn.contains(e.target) || card === e.target) return;
+      var ownGesture = false;
+      function begin(x, y) {
         tracking = true;
         armed = false;
+        ownGesture = false;
         axis = null;
-        startX = e.clientX;
-        startY = e.clientY;
+        startX = x;
+        startY = y;
         suppress(true);
+        if (holdTimer !== null) clearTimeout(holdTimer);
         holdTimer = setTimeout(function () {
           holdTimer = null;
           armed = true;
+          ownGesture = true;
+          // 長押しの成立: ハンバーガーを出す(メニューは下フリックで開く)。
           btn.classList.add('vz-menu-open');
           btn.setAttribute('aria-expanded', 'true');
           hapticPulse(20);
         }, HOLD_MS);
-      }, { passive: true });
-      document.addEventListener('pointermove', function (e) {
+      }
+      function move(x, y, prevent) {
         if (!tracking) return;
-        var dx = e.clientX - startX;
-        var dy = e.clientY - startY;
+        var dx = x - startX;
+        var dy = y - startY;
         if (axis === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
           axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
-          if (holdTimer !== null) {
-            clearTimeout(holdTimer);
-            holdTimer = null;
-          }
+          if (holdTimer !== null) { clearTimeout(holdTimer); holdTimer = null; }
           suppress(false);
           if (axis === 'x') {
-            // 横スワイプ: 文字選択を許可し、ブラウザの選択に任せる。
+            ownGesture = true;
+            // 横スワイプ: この位置からの文字選択を許可する。
             document.body.classList.add('vz-selecting');
             hapticPulse(12);
+            if (prevent !== undefined) prevent();
+            return;
           }
         }
         if (axis === 'y' && armed === true && dy > SWIPE_MIN && !isOpen()) {
-          // 長押しの後の下フリック: メニューを展開する。
+          // 長押しの後、指を離さず下へフリック: メニューを展開する。
+          ownGesture = true;
           openMenu();
           hapticPulse(24);
+          if (prevent !== undefined) prevent();
+          return;
         }
         if (axis === 'y' && armed !== true && dy < -SWIPE_MIN && !collapsed) {
           // 上スワイプ: 内容を 1 行のカードへ畳む。
+          ownGesture = true;
           collapseContent();
           armed = true;
+          if (prevent !== undefined) prevent();
         }
-      }, { passive: true });
-      var endGesture = function () {
+      }
+      function end() {
         tracking = false;
         armed = false;
         axis = null;
+        ownGesture = false;
         suppress(false);
         document.body.classList.remove('vz-selecting');
         if (holdTimer !== null) { clearTimeout(holdTimer); holdTimer = null; }
-      };
-      document.addEventListener('pointerup', endGesture, { passive: true });
-      document.addEventListener('pointercancel', endGesture, { passive: true });
+      }
+      document.addEventListener('touchstart', function (e) {
+        if (panel.contains(e.target) || btn.contains(e.target) || card === e.target) return;
+        var t = e.touches[0];
+        if (t === undefined) return;
+        begin(t.clientX, t.clientY);
+      }, { passive: true });
+      document.addEventListener('touchmove', function (e) {
+        var t = e.touches[0];
+        if (t === undefined) return;
+        move(t.clientX, t.clientY, function () {
+          // 自分のジェスチャが確定した後だけスクロールを止める。
+          if (e.cancelable) e.preventDefault();
+        });
+      }, { passive: false });
+      document.addEventListener('touchend', end, { passive: true });
+      document.addEventListener('touchcancel', end, { passive: true });
+      // マウス(ホバーのある環境)はボタンの hover で足りるので、ここでは扱わない。
     }
     // ── ダブルクリックで要素編集(data-editable) ──
     // 原本は保持し、上書きは edits として state に保存、表示は上書き優先。
