@@ -76,7 +76,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@eb84f8e6f1 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@1247d5bfe2 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -269,9 +269,21 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 .vz-menu-content { padding-top: 30px; }
 .vz-menu-content-bottom { padding-top: 0; padding-bottom: 30px; }
 .vz-menu-h {
-  font-size: .82em; color: var(--vz-dim); font-weight: 500;
-  margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .04em;
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  padding: 7px 2px; margin: 0;
+  border: 0; border-top: 1px solid var(--vz-border);
+  background: transparent; color: var(--vz-text);
+  font: inherit; font-size: .9em; font-weight: 600; text-align: left; cursor: pointer;
 }
+.vz-menu-h:first-of-type { border-top: 0; }
+.vz-menu-h::after {
+  content: ''; margin-left: auto; width: 0; height: 0;
+  border-left: 4px solid transparent; border-right: 4px solid transparent;
+  border-top: 5px solid currentColor; opacity: .7;
+  transition: transform .16s ease;
+}
+.vz-menu-h[aria-expanded="true"]::after { transform: rotate(180deg); }
+.vz-menu-body { padding: 2px 0 8px 8px; }
 .vz-menu-panel > .vz-menu-h:first-child, .vz-menu-content > .vz-menu-h:first-child { margin-top: 0; }
 .vz-menu-row { display: flex; align-items: center; gap: 6px; margin: 4px 0; flex-wrap: wrap; }
 .vz-menu-label { flex: 1 1 auto; color: var(--vz-dim); font-size: .92em; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -465,16 +477,33 @@ body.vz-longpress, body.vz-longpress * {
       : 'vz-menu-content';
     panel.appendChild(content);
 
-    function section(title) {
-      var h = document.createElement('div');
+    // 見出しは折り畳み式: タップで開閉し、既定は閉じる(パネルが長くならない)。
+    var openedSections = {};
+    function section(title, key) {
+      var body = document.createElement('div');
+      body.className = 'vz-menu-body';
+      body.style.display = openedSections[key] === true ? 'block' : 'none';
+      var h = document.createElement('button');
+      h.type = 'button';
       h.className = 'vz-menu-h';
       h.textContent = title;
+      h.setAttribute('aria-expanded', openedSections[key] === true ? 'true' : 'false');
+      h.addEventListener('click', function () {
+        openedSections[key] = openedSections[key] !== true;
+        body.style.display = openedSections[key] === true ? 'block' : 'none';
+        h.setAttribute('aria-expanded', openedSections[key] === true ? 'true' : 'false');
+      });
       content.appendChild(h);
+      content.appendChild(body);
+      currentBody = body;
+      return body;
     }
+    // 行は現在のセクション(body)へ入れる。body が無ければ content へ。
+    var currentBody = null;
     function row() {
       var r = document.createElement('div');
       r.className = 'vz-menu-row';
-      content.appendChild(r);
+      (currentBody || content).appendChild(r);
       return r;
     }
     function button(label, fn) {
@@ -584,7 +613,7 @@ body.vz-longpress, body.vz-longpress * {
     function build() {
       content.textContent = '';
       if (charts().length > 0) {
-        section('表示');
+        var viewBody = section('表示', 'view');
         var viewRow = row();
         var chartBtn = button(tableMode ? 'グラフ' : 'グラフ ✓', function () {
           tableMode = false;
@@ -602,7 +631,7 @@ body.vz-longpress, body.vz-longpress * {
         viewRow.appendChild(tableBtn);
 
         if (!tableMode) {
-          section('コピー / ダウンロード');
+          var exportBody = section('コピー / ダウンロード', 'export');
           // 形式のプルダウン + COPY/DL トグル + 実行ボタン 1 つ。
           var FORMATS = [
             ['chart-png', 'グラフ(透過 PNG)'],
@@ -760,7 +789,7 @@ body.vz-longpress, body.vz-longpress * {
         }
       }
 
-      section('拡大率');
+      var zoomBody = section('拡大率', 'zoom');
       var zoomRow = row();
       var zoom = document.createElement('input');
       zoom.type = 'range';
@@ -776,11 +805,87 @@ body.vz-longpress, body.vz-longpress * {
         root.setAttribute('data-viz-zoom', String(Number(zoom.value) / 100));
         zoomLabel.textContent = zoom.value + '%';
         if (typeof fit === 'function') fit();
+        // ズーム後は計測幅が変わるので描き直す(古い幅のままだと棒が崩れる)。
+        charts().forEach(function (c) { c.update(c.config, true); });
       });
       zoomRow.appendChild(zoom);
       zoomRow.appendChild(zoomLabel);
 
-      section('色の上書き(この表示限定)');
+      // 文字: フォントファミリ・サイズ・対象の役割。
+      var textBody = section('文字', 'text');
+      var fontState = { family: '', size: 0, role: 'all' };
+      var roleRow = row();
+      var roleLabel = document.createElement('span');
+      roleLabel.className = 'vz-menu-label';
+      roleLabel.textContent = '対象';
+      var roleSelect = document.createElement('select');
+      roleSelect.className = 'form-select';
+      roleSelect.style.flex = '1';
+      [['all', 'すべて'], ['title', 'タイトル'], ['label', '軸ラベル'], ['tick', '目盛り']].forEach(function (pair) {
+        var option = document.createElement('option');
+        option.value = pair[0];
+        option.textContent = pair[1];
+        roleSelect.appendChild(option);
+      });
+      roleSelect.addEventListener('change', function () { fontState.role = roleSelect.value; });
+      roleRow.appendChild(roleLabel);
+      roleRow.appendChild(roleSelect);
+
+      var fontRow = row();
+      var fontLabel = document.createElement('span');
+      fontLabel.className = 'vz-menu-label';
+      fontLabel.textContent = 'フォント';
+      var fontSelect = document.createElement('select');
+      fontSelect.className = 'form-select';
+      fontSelect.style.flex = '1';
+      [['', '既定'], ['system-ui, sans-serif', 'システム'], ['"Hiragino Kaku Gothic ProN", sans-serif', 'ヒラギノ'],
+        ['ui-monospace, monospace', '等幅'], ['serif', 'セリフ']].forEach(function (pair) {
+        var option = document.createElement('option');
+        option.value = pair[0];
+        option.textContent = pair[1];
+        fontSelect.appendChild(option);
+      });
+      fontSelect.addEventListener('change', function () {
+        fontState.family = fontSelect.value;
+        applyFont();
+      });
+      fontRow.appendChild(fontLabel);
+      fontRow.appendChild(fontSelect);
+
+      var sizeRow = row();
+      var sizeInput = document.createElement('input');
+      sizeInput.type = 'range';
+      sizeInput.min = '8';
+      sizeInput.max = '28';
+      sizeInput.step = '1';
+      sizeInput.value = '12';
+      sizeInput.style.flex = '1';
+      var sizeValue = document.createElement('span');
+      sizeValue.className = 'vz-menu-label';
+      sizeValue.textContent = '12px';
+      sizeInput.addEventListener('input', function () {
+        fontState.size = Number(sizeInput.value);
+        sizeValue.textContent = fontState.size + 'px';
+        applyFont();
+      });
+      sizeRow.appendChild(sizeInput);
+      sizeRow.appendChild(sizeValue);
+
+      /** 文字の上書きを適用し、全チャートを再描画する。 */
+      function applyFont() {
+        if (fontState.family !== '') root.style.setProperty('--vz-font', fontState.family);
+        if (fontState.size > 0) {
+          var roles = fontState.role === 'all' ? ['title', 'label', 'tick'] : [fontState.role];
+          if (fontState.role === 'all') root.style.setProperty('--vz-font-size', fontState.size + 'px');
+          roles.forEach(function (role) {
+            root.style.setProperty('--vz-font-' + role, fontState.size + 'px');
+          });
+        }
+        charts().forEach(function (c) { c.update(c.config, true); });
+        report();
+      }
+
+      var colorBody = section('色', 'color');
       [['text', '--vz-text'], ['surface', '--vz-surface'], ['accent', '--vz-accent']].forEach(function (pair) {
         var cr = row();
         var label = document.createElement('span');
@@ -790,28 +895,31 @@ body.vz-longpress, body.vz-longpress * {
         input.type = 'color';
         input.value = '#000000';
         input.addEventListener('input', function () {
-          // 上書きは内容側(.vz-content)だけに効かせる。メニュー自身の UI は
-          // リテラル色で固定なので、誤設定でもメニューは壊れない。
-          var content = document.querySelector('.vz-content');
-          if (content !== null) content.style.setProperty(pair[1], input.value);
-          charts().forEach(function (c) { c.update(c.config); });
+          // viz.chart は documentElement の computed style から --vz-* を読む。
+          // .vz-content に置いても反映されない(実測)。ルートへ設定して再描画する。
+          root.style.setProperty(pair[1], input.value);
+          charts().forEach(function (c) { c.update(c.config, true); });
           report();
         });
         cr.appendChild(label);
         cr.appendChild(input);
       });
 
-      section('リセット');
+      var resetBody = section('リセット', 'reset');
       var resetRow = row();
       resetRow.appendChild(button('デフォルトに戻す', function () {
         // 誤設定からの復帰: 拡大率・色・スクロール・表示モードを既定へ。
         root.removeAttribute('data-viz-zoom');
-        var content = document.querySelector('.vz-content');
-        if (content !== null) {
-          content.style.removeProperty('--vz-text');
-          content.style.removeProperty('--vz-surface');
-          content.style.removeProperty('--vz-accent');
-        }
+        root.style.removeProperty('--vz-text');
+        root.style.removeProperty('--vz-dim');
+        root.style.removeProperty('--vz-surface');
+        root.style.removeProperty('--vz-accent');
+        root.style.removeProperty('--vz-border');
+        root.style.removeProperty('--vz-font');
+        root.style.removeProperty('--vz-font-size');
+        root.style.removeProperty('--vz-font-title');
+        root.style.removeProperty('--vz-font-label');
+        root.style.removeProperty('--vz-font-tick');
         window.__dshVizScroll = 'none';
         tableMode = false;
         if (typeof fit === 'function') fit();
@@ -820,7 +928,7 @@ body.vz-longpress, body.vz-longpress * {
         report();
       }));
 
-      section('スクロール');
+      var scrollBody = section('スクロール', 'scroll');
       var scrollRow = row();
       var select = document.createElement('select');
       select.className = 'form-select';
@@ -1122,7 +1230,7 @@ body.vz-longpress, body.vz-longpress * {
       var target = content();
       if (target !== null) target.style.zoom = String(percent / 100);
       // ズーム後は計測幅が変わるので描き直す(古い幅のままだと棒が崩れる)。
-      charts().forEach(function (c) { c.update(c.config); });
+      charts().forEach(function (c) { c.update(c.config, true); });
     }
 
     /**
@@ -1131,7 +1239,7 @@ body.vz-longpress, body.vz-longpress * {
      */
     function overrideColor(key, value) {
       document.documentElement.style.setProperty('--vz-' + key, value);
-      charts().forEach(function (c) { c.update(c.config); });
+      charts().forEach(function (c) { c.update(c.config, true); });
     }
 
     /** 文字の上書き: フォントファミリと基本サイズ。 */
@@ -1153,7 +1261,7 @@ body.vz-longpress, body.vz-longpress * {
           root.style.setProperty('--vz-font-' + role, fonts.size + 'px');
         });
       }
-      charts().forEach(function (c) { c.update(c.config); });
+      charts().forEach(function (c) { c.update(c.config, true); });
     }
 
     function resetAll() {
@@ -2034,13 +2142,13 @@ body.vz-longpress, body.vz-longpress * {
     if (svg && !reducedMotion()) {
       requestAnimationFrame(function () { svg.classList.add('vz-animate'); });
     }
-    function update(next) {
+    function update(next, force) {
       // The animated swap is bar-only. Line/area/scatter redraw everything:
       // their title, reference lines and axis scale change with the data, and
       // a marks-only swap left those stale (measured: a threshold slider
       // moved the marks but the reference line and title never followed).
       // A keyed diff for paths and cells is not worth its weight here.
-      var sameShape = current.type === 'bar' && next.type === 'bar'
+      var sameShape = force !== true && current.type === 'bar' && next.type === 'bar'
         && (current.rows || []).length === (next.rows || []).length
         && host.querySelector('svg') !== null;
       if (sameShape) {
