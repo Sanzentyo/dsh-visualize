@@ -76,7 +76,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@9fd6e4c400 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@eb84f8e6f1 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -101,6 +101,8 @@ h3, h4 { font-size: 1em; line-height: 1.5; }
 .viz-stack > * + * { margin-top: calc(var(--vz-font-size, 14px) * 1); }
 .viz-stack > h1 + *, .viz-stack > h2 + *, .viz-stack > h3 + * { margin-top: calc(var(--vz-font-size, 14px) * .5); }
 a { color: var(--vz-accent); text-decoration: none; }
+/* SVG の文字も本文のフォントを継承させる(--vz-font の上書きが効く)。 */
+svg text { font-family: var(--vz-font, system-ui, sans-serif); }
 a:hover { text-decoration: underline; }
 code, pre { font-family: var(--vz-font-code, ui-monospace, monospace); }
 svg { display: block; max-width: 100%; height: auto; }
@@ -1133,10 +1135,24 @@ body.vz-longpress, body.vz-longpress * {
     }
 
     /** 文字の上書き: フォントファミリと基本サイズ。 */
-    function overrideFont(family, sizePx) {
+    /**
+     * 文字の上書き。fonts.role は 'all' | 'title' | 'label' | 'tick'。
+     * 'all' は本文(--vz-font-size)と全役割、それ以外はその役割だけ。
+     */
+    function overrideFont(fonts) {
       var root = document.documentElement;
-      if (family !== undefined && family !== '') root.style.setProperty('--vz-font', family);
-      if (sizePx !== undefined && sizePx > 0) root.style.setProperty('--vz-font-size', sizePx + 'px');
+      if (fonts.family !== undefined && fonts.family !== '') root.style.setProperty('--vz-font', fonts.family);
+      var roles = fonts.role === 'all' || fonts.role === undefined
+        ? ['title', 'label', 'tick']
+        : [fonts.role];
+      if (fonts.size !== undefined && fonts.size > 0) {
+        if (fonts.role === 'all' || fonts.role === undefined) {
+          root.style.setProperty('--vz-font-size', fonts.size + 'px');
+        }
+        roles.forEach(function (role) {
+          root.style.setProperty('--vz-font-' + role, fonts.size + 'px');
+        });
+      }
       charts().forEach(function (c) { c.update(c.config); });
     }
 
@@ -1150,6 +1166,9 @@ body.vz-longpress, body.vz-longpress * {
       root.style.removeProperty('--vz-border');
       root.style.removeProperty('--vz-font');
       root.style.removeProperty('--vz-font-size');
+      root.style.removeProperty('--vz-font-title');
+      root.style.removeProperty('--vz-font-label');
+      root.style.removeProperty('--vz-font-tick');
       var target = content();
       if (target !== null) target.style.zoom = '';
       window.__dshVizScroll = 'none';
@@ -1299,7 +1318,7 @@ body.vz-longpress, body.vz-longpress * {
       if (command.type === 'view') applyView(command.table === true);
       else if (command.type === 'zoom') adjustZoom(command.value);
       else if (command.type === 'color') overrideColor(command.key, command.value);
-      else if (command.type === 'font') overrideFont(command.family, command.size);
+      else if (command.type === 'font') overrideFont(command.fonts || {});
       else if (command.type === 'reset') resetAll();
       else if (command.type === 'scroll') { window.__dshVizScroll = command.value; fit(); }
       else if (command.type === 'export') runExport(command);
@@ -1330,6 +1349,26 @@ body.vz-longpress, body.vz-longpress * {
     return v || fallback;
   }
   function color(i) { return cssVar(SERIES[i % SERIES.length], 'currentColor'); }
+
+  /**
+   * 文字のサイズを CSS 変数経由にする。
+   *
+   * SVG の font-size を属性で直書きすると、ルートの --vz-font-size を
+   * 上書きしても反映されない(実測)。属性の値から役割を判定し、役割ごとの
+   * CSS 変数(var(--vz-font-<role>, <既定>px))を style に持たせる。
+   * 役割: title(タイトル)/ label(軸ラベル)/ tick(目盛り)。
+   */
+  function finish(svg) {
+    var texts = svg.querySelectorAll('text');
+    Array.prototype.forEach.call(texts, function (node) {
+      var size = Number(node.getAttribute('font-size'));
+      if (!isFinite(size) || size <= 0) return;
+      var role = size >= 12 ? 'title' : size >= 11 ? 'label' : 'tick';
+      node.removeAttribute('font-size');
+      node.style.fontSize = 'var(--vz-font-' + role + ', ' + size + 'px)';
+    });
+    return svg;
+  }
 
   // Named ramps for value-encoded fills. 'series' keeps the single series hue
   // and varies opacity, which is the quiet default; the rest follow the
@@ -1452,7 +1491,7 @@ body.vz-longpress, body.vz-longpress * {
         ang = next;
       });
       host.appendChild(svg);
-      return svg;
+      return finish(svg);
     }
 
     if (type === 'ranking' || (type === 'bar' && config.horizontal === true)) {
@@ -1490,7 +1529,7 @@ body.vz-longpress, body.vz-longpress * {
       });
       svg.setAttribute('viewBox', '0 0 ' + W + ' ' + (padT + rowH * sorted.length + padB));
       host.appendChild(svg);
-      return svg;
+      return finish(svg);
     }
 
     if (type === 'waterfall') {
@@ -1526,7 +1565,7 @@ body.vz-longpress, body.vz-longpress * {
         svg.appendChild(lb);
       });
       host.appendChild(svg);
-      return svg;
+      return finish(svg);
     }
 
     if (type === 'sankey') {
@@ -1591,7 +1630,7 @@ body.vz-longpress, body.vz-longpress * {
         svg.appendChild(t2);
       });
       host.appendChild(svg);
-      return svg;
+      return finish(svg);
     }
 
     if (type === 'heatmap') {
@@ -1642,7 +1681,7 @@ body.vz-longpress, body.vz-longpress * {
       });
       svg.setAttribute('viewBox', '0 0 ' + W + ' ' + (padT + ch * ysList.length + padB));
       host.appendChild(svg);
-      return svg;
+      return finish(svg);
     }
 
     if (type === 'funnel') {
@@ -1664,7 +1703,7 @@ body.vz-longpress, body.vz-longpress * {
       });
       svg.setAttribute('viewBox', '0 0 ' + W + ' ' + (padT + fh * rows.length + padB));
       host.appendChild(svg);
-      return svg;
+      return finish(svg);
     }
 
     if (type === 'box-plot') {
@@ -1700,7 +1739,7 @@ body.vz-longpress, body.vz-longpress * {
         svg.appendChild(lb2);
       });
       host.appendChild(svg);
-      return svg;
+      return finish(svg);
     }
 
     // A hidden series keeps its slot in the scale, so the visible ones do not
@@ -1881,7 +1920,7 @@ body.vz-longpress, body.vz-longpress * {
       });
       host.appendChild(legend);
     }
-    return svg;
+    return finish(svg);
   }
 
   /** True when the reader asked the platform for less motion. */
@@ -2053,14 +2092,24 @@ body.vz-longpress, body.vz-longpress * {
     if (typeof ResizeObserver === 'function') {
       var lastWidth = host.clientWidth;
       var pending = null;
+      var redrawing = false;
       var observer = new ResizeObserver(function () {
+        // 自分の再描画が起こしたサイズ変化は無視する(無限再帰の実測あり)。
+        if (redrawing) return;
         var width = host.clientWidth;
         if (width === 0 || Math.abs(width - lastWidth) < 8) return;
         lastWidth = width;
         if (pending !== null) clearTimeout(pending);
         pending = setTimeout(function () {
           pending = null;
-          update(current);
+          redrawing = true;
+          try {
+            draw(host, current);
+          } catch (error) {
+            drawError(host, error);
+          }
+          // 再描画で高さが変わった分の通知を 1 フレーム遅らせて逃がす。
+          requestAnimationFrame(function () { redrawing = false; });
         }, 60);
       });
       observer.observe(host);
@@ -2585,7 +2634,7 @@ body { padding: 14px 16px 16px; }`
       /** 折り畳みセクションの開閉状態(既定は閉)。 */
       var opened = {}
       /** 文字設定。 */
-      var font = { family: '', size: 0 }
+      var font = { family: '', size: 0, role: 'all' }
 
       /** 見出しをタップで開閉するセクションを作る。@returns 中身を入れる要素。 */
       function section(title, key) {
@@ -2729,6 +2778,23 @@ body { padding: 14px 16px 16px; }`
 
         // 文字: フォントとサイズ
         var textBody = section('文字', 'text')
+        // どの役割の文字を変えるか(既定はすべて)。
+        var roleRow = el('div', 'vz-fm-row')
+        var roleLabel = el('span', 'vz-fm-label', '対象')
+        var roleSelect = el('select', 'vz-fm-select')
+        ;[['all', 'すべて'], ['title', 'タイトル'], ['label', '軸ラベル'], ['tick', '目盛り']].forEach(function (pair) {
+          var option = el('option', undefined, pair[1])
+          option.value = pair[0]
+          if (font.role === pair[0]) option.selected = true
+          roleSelect.appendChild(option)
+        })
+        roleSelect.addEventListener('change', function () {
+          font.role = roleSelect.value
+        })
+        roleRow.appendChild(roleLabel)
+        roleRow.appendChild(roleSelect)
+        textBody.appendChild(roleRow)
+
         var fontRow = el('div', 'vz-fm-row')
         var fontLabel = el('span', 'vz-fm-label', 'フォント')
         var fontSelect = el('select', 'vz-fm-select')
@@ -2740,7 +2806,7 @@ body { padding: 14px 16px 16px; }`
         })
         fontSelect.addEventListener('change', function () {
           font.family = fontSelect.value
-          send({ type: 'font', family: font.family, size: font.size })
+          send({ type: 'font', fonts: { family: font.family, size: font.size, role: font.role } })
         })
         fontRow.appendChild(fontLabel)
         fontRow.appendChild(fontSelect)
@@ -2758,7 +2824,7 @@ body { padding: 14px 16px 16px; }`
         size.addEventListener('input', function () {
           font.size = Number(size.value)
           sizeValue.textContent = font.size + 'px'
-          send({ type: 'font', family: font.family, size: font.size })
+          send({ type: 'font', fonts: { family: font.family, size: font.size, role: font.role } })
         })
         sizeRow.appendChild(sizeLabel)
         sizeRow.appendChild(size)
@@ -2792,6 +2858,7 @@ body { padding: 14px 16px 16px; }`
           state.zoom = 100
           font.family = ''
           font.size = 0
+          font.role = 'all'
           send({ type: 'reset' })
           build()
         }))
