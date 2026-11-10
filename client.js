@@ -76,7 +76,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@ac90d3d5bd (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@9fd6e4c400 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -416,9 +416,16 @@ body.vz-longpress, body.vz-longpress * {
   // The fragment's scripts run during parse, so the content exists by
   // DOMContentLoaded; fonts and images may still shift the layout, so the
   // load and a delayed pass re-measure.
-  document.addEventListener('DOMContentLoaded', fit);
-  addEventListener('load', fit);
-  setTimeout(fit, 150);
+  /** fit の後に全チャートへ再計測を促す(描画幅のずれを直す)。 */
+  function refitCharts() {
+    var charts = (window.viz && window.viz._charts) || [];
+    charts.forEach(function (c) {
+      if (c && typeof c.update === 'function' && c.config !== undefined) c.update(c.config);
+    });
+  }
+  document.addEventListener('DOMContentLoaded', function () { fit(); refitCharts(); });
+  addEventListener('load', function () { fit(); refitCharts(); });
+  setTimeout(function () { fit(); refitCharts(); }, 150);
 
   // ── frame menu ──
   // 既定 ON: 折りたたまれたハンバーガーが領域内の右上に出る(absolute — 領域の中)。
@@ -1418,7 +1425,11 @@ body.vz-longpress, body.vz-longpress * {
       : config.align === 'right' ? 'flex-end' : 'center';
     var padL = type === 'sparkline' ? 2 : 52, padR = 12, padT = config.title ? 26 : 12, padB = type === 'sparkline' ? 2 : 34;
     var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, width: '100%', role: 'img' });
-    svg.style.maxWidth = W + 'px';
+    // 幅を実測値で固定しない。固定すると初回計測が広い値だったときに
+    // SVG が枠を超えてはみ出し、狭い画面で棒グラフが切れる(実測: 390px の
+    // 枠で 980px を主張して画面外へ溢れた)。viewBox と width:100% で
+    // 常に枠幅に縮尺される。
+    svg.style.maxWidth = '100%';
     if (config.title) {
       var t = el('text', { x: 0, y: 14, 'font-size': 12, fill: cssVar('--vz-text', '#000') });
       t.textContent = config.title;
@@ -1995,16 +2006,24 @@ body.vz-longpress, body.vz-longpress * {
         && host.querySelector('svg') !== null;
       if (sameShape) {
         var before = host.querySelectorAll('[data-bar]');
+        // 差分描画用の下見は、必ず実ホストと同じ幅で描く。切り離した div は
+        // clientWidth が 0 で 640 の既定幅に落ち、別幅で計算した棒の座標を
+        // 実 SVG へ写すと崩れる(実測)。幅を合わせて body に一時的に載せる。
         var probe = document.createElement('div');
+        probe.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;width:'
+          + (host.clientWidth > 0 ? host.clientWidth : 640) + 'px';
+        document.body.appendChild(probe);
         try {
           draw(probe, next);
         } catch (error) {
+          probe.remove();
           drawError(host, error);
           current = next;
           entry.config = next;
           return;
         }
         var after = probe.querySelectorAll('[data-bar]');
+        probe.remove();
         if (before.length === after.length) {
           var attrs = ['x', 'y', 'width', 'height', 'fill'];
           for (var i = 0; i < before.length; i++) {
@@ -2029,6 +2048,23 @@ body.vz-longpress, body.vz-longpress * {
       entry.config = next;
     }
     entry.update = update;
+    // 幅が変わったら描き直す。パース中は host の実幅が確定しておらず、
+    // 広い幅で geometry を組んだまま狭い枠に押し込まれると棒が潰れる(実測)。
+    if (typeof ResizeObserver === 'function') {
+      var lastWidth = host.clientWidth;
+      var pending = null;
+      var observer = new ResizeObserver(function () {
+        var width = host.clientWidth;
+        if (width === 0 || Math.abs(width - lastWidth) < 8) return;
+        lastWidth = width;
+        if (pending !== null) clearTimeout(pending);
+        pending = setTimeout(function () {
+          pending = null;
+          update(current);
+        }, 60);
+      });
+      observer.observe(host);
+    }
     return {
       update: update,
     };
