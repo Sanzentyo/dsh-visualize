@@ -76,7 +76,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@594c50b113 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@ac90d3d5bd (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -954,25 +954,101 @@ body.vz-longpress, body.vz-longpress * {
       document.addEventListener('touchend', cancelHold, { passive: true });
       document.addEventListener('touchcancel', cancelHold, { passive: true });
     }
-    // ── ダブルクリックで要素編集(data-editable) ──
+    // ── インライン編集(data-editable) ──
     // 原本は保持し、上書きは edits として state に保存、表示は上書き優先。
+    // マウスは dblclick、タッチは **ダブルタップ**(300ms 以内の 2 回)で入る。
+    // dblclick はタッチで発火しないため、touch 側で自前に判定する。
+    var editTarget = null;
+    var lastTapAt = 0;
+    var lastTapTarget = null;
+
+    function beginEdit(t) {
+      if (editTarget !== null) return;
+      editTarget = t;
+      var key = t.getAttribute('data-editable') || '';
+      var original = t.textContent;
+      // 編集中は選択とソフトキーボードを許可する(長押し抑制を外す)。
+      document.body.classList.remove('vz-longpress');
+      t.setAttribute('data-editing', 'true');
+      t.contentEditable = 'true';
+      t.focus();
+      // 全選択して、そのまま打ち替えられるようにする。
+      try {
+        var range = document.createRange();
+        range.selectNodeContents(t);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } catch (e) { /* selection unavailable */ }
+      // ソフトキーボードで隠れないよう、画面の中央へ寄せる。
+      t.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      // キーボード表示後のリサイズでもう一度寄せる(iOS はレイアウトが遅れる)。
+      if (window.visualViewport !== undefined) {
+        var once = function () {
+          window.visualViewport.removeEventListener('resize', once);
+          t.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        };
+        window.visualViewport.addEventListener('resize', once);
+      }
+
+      function finish(commit) {
+        t.removeEventListener('blur', onBlur);
+        t.removeEventListener('keydown', onKey);
+        t.contentEditable = 'false';
+        t.removeAttribute('data-editing');
+        editTarget = null;
+        if (commit === true) {
+          var text = t.textContent.trim();
+          if (text !== '') {
+            edits[key] = text;
+            report();
+          } else {
+            t.textContent = original;
+          }
+        } else {
+          t.textContent = original;
+        }
+        // 確定/取り消し後はキーボードを閉じる。
+        if (typeof t.blur === 'function') t.blur();
+      }
+      function onBlur() { finish(true); }
+      function onKey(e) {
+        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+          e.preventDefault();
+          finish(true);
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          finish(false);
+        }
+      }
+      t.addEventListener('blur', onBlur);
+      t.addEventListener('keydown', onKey);
+    }
+
+    // マウス: ダブルクリック。
     document.addEventListener('dblclick', function (e) {
       var t = e.target.closest && e.target.closest('[data-editable]');
       if (t === null) return;
       e.preventDefault();
-      var key = t.getAttribute('data-editable') || '';
-      t.contentEditable = 'true';
-      t.focus();
-      t.addEventListener('blur', function onBlur() {
-        t.removeEventListener('blur', onBlur);
-        t.contentEditable = 'false';
-        var text = t.textContent.trim();
-        if (text !== '') {
-          edits[key] = text;
-          report();
-        }
-      });
+      beginEdit(t);
     });
+
+    // タッチ: ダブルタップ(同じ要素を 300ms 以内に 2 回)。
+    document.addEventListener('touchend', function (e) {
+      var t = e.target.closest && e.target.closest('[data-editable]');
+      if (t === null) { lastTapTarget = null; return; }
+      var now = Date.now();
+      if (lastTapTarget === t && now - lastTapAt < 300) {
+        e.preventDefault();
+        beginEdit(t);
+        lastTapTarget = null;
+        lastTapAt = 0;
+        return;
+      }
+      lastTapTarget = t;
+      lastTapAt = now;
+    }, { passive: false });
+
     // 復元: 保存済みの上書きを適用する。
     document.addEventListener('DOMContentLoaded', function () {
       Object.keys(edits).forEach(function (key) {
