@@ -76,7 +76,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@b165449742 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@f934320825 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -246,7 +246,7 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
   position: absolute; z-index: 2147483646;
   /* 幅は領域に収め、高さは領域の 70% で頭打ちにして中でスクロールさせる。
      領域が低いときにパネルがはみ出して切れるのを防ぐ。 */
-  min-width: 220px; max-width: min(300px, calc(100% - 8px));
+  min-width: 300px; max-width: min(400px, calc(100% - 8px));
   max-height: min(70vh, calc(100% - 8px)); overflow-y: auto; overscroll-behavior: contain;
   /* border-box でないと max-height が padding を含まず、領域より高くなる。 */
   box-sizing: border-box;
@@ -432,6 +432,34 @@ body.vz-longpress, body.vz-longpress * {
   // The fragment's scripts run during parse, so the content exists by
   // DOMContentLoaded; fonts and images may still shift the layout, so the
   // load and a delayed pass re-measure.
+  /**
+   * 保存された設定を起動時に戻す。拡大率・スクロール・色・フォント。
+   * viz.restore() はフレームの外(親)が注入した state を返す。
+   */
+  function restoreSavedSettings() {
+    var saved = (window.viz && window.viz.restore) ? (window.viz.restore() || null) : null;
+    if (saved === null || typeof saved !== 'object') return;
+    var root = document.documentElement;
+    if (typeof saved.zoom === 'number' && saved.zoom > 0) {
+      root.setAttribute('data-viz-zoom', String(saved.zoom / 100));
+    }
+    if (typeof saved.scroll === 'string' && saved.scroll !== '') {
+      window.__dshVizScroll = saved.scroll;
+    }
+    if (saved.colors !== null && typeof saved.colors === 'object') {
+      Object.keys(saved.colors).forEach(function (token) {
+        var value = saved.colors[token];
+        if (typeof value === 'string' && value !== '') root.style.setProperty(token, value);
+      });
+    }
+    if (saved.fonts !== null && typeof saved.fonts === 'object') {
+      Object.keys(saved.fonts).forEach(function (token) {
+        var value = saved.fonts[token];
+        if (typeof value === 'string' && value !== '') root.style.setProperty(token, value);
+      });
+    }
+  }
+
   /** fit の後に全チャートへ再計測を促す(描画幅のずれを直す)。 */
   function refitCharts() {
     var charts = (window.viz && window.viz._charts) || [];
@@ -439,7 +467,11 @@ body.vz-longpress, body.vz-longpress * {
       if (c && typeof c.update === 'function' && c.config !== undefined) c.update(c.config);
     });
   }
-  document.addEventListener('DOMContentLoaded', function () { fit(); refitCharts(); });
+  document.addEventListener('DOMContentLoaded', function () {
+    restoreSavedSettings();
+    fit();
+    refitCharts();
+  });
   addEventListener('load', function () { fit(); refitCharts(); });
   setTimeout(function () { fit(); refitCharts(); }, 150);
 
@@ -570,17 +602,22 @@ body.vz-longpress, body.vz-longpress * {
     // ── 状態の保持と復元 ──
     var saved = (window.viz && window.viz.restore) ? (window.viz.restore() || {}) : {};
     var edits = saved.edits || {};
+    /** 上書きした色(トークン名 → 値)。復元と保存に使う。 */
+    var appliedColors = saved.colors !== null && typeof saved.colors === 'object' ? saved.colors : {};
+    /** 上書きしたフォント(--vz-font-<role>-family などのトークン名 → 値)。 */
+    var appliedFonts = saved.fonts !== null && typeof saved.fonts === 'object' ? saved.fonts : {};
 
+    /**
+     * 設定の保存。復元できるよう、上書きしたトークンをキーで記録する。
+     * (どの要素をどの色/フォントにしたかが分かる形で残す)
+     */
     function report() {
       if (!window.viz || !window.viz.state) return;
       window.viz.state({
         tableMode: tableMode,
         zoom: Number(root.getAttribute('data-viz-zoom')) || 1,
-        colors: {
-          text: root.style.getPropertyValue('--vz-text') || undefined,
-          surface: root.style.getPropertyValue('--vz-surface') || undefined,
-          accent: root.style.getPropertyValue('--vz-accent') || undefined,
-        },
+        colors: appliedColors,
+        fonts: appliedFonts,
         scroll: window.__dshVizScroll || 'none',
         edits: edits,
       });
@@ -877,6 +914,54 @@ body.vz-longpress, body.vz-longpress * {
         charts().forEach(function (c) { c.update(c.config, true); });
         report();
       }
+
+      // 幅: 内容の表示幅(列に対する %)。既定は 100%。
+      var widthBody = section('幅');
+      var widthRow = row();
+      var widthInput = document.createElement('input');
+      widthInput.type = 'range';
+      widthInput.min = '40';
+      widthInput.max = '100';
+      widthInput.step = '5';
+      widthInput.value = '100';
+      widthInput.style.flex = '1';
+      var widthValue = document.createElement('span');
+      widthValue.className = 'vz-menu-label';
+      widthValue.textContent = '100%';
+      widthInput.addEventListener('input', function () {
+        var percent = Number(widthInput.value);
+        widthValue.textContent = percent + '%';
+        var target = document.querySelector('.vz-content');
+        if (target !== null) {
+          target.style.maxWidth = percent >= 100 ? '' : percent + '%';
+          target.style.margin = '0 auto';
+        }
+        fit();
+        charts().forEach(function (c) { c.update(c.config, true); });
+        report();
+      });
+      widthRow.appendChild(widthInput);
+      widthRow.appendChild(widthValue);
+
+      // 位置: メニューを四隅のどこへ置くか(フレーム内メニューの位置)。
+      var positionBody = section('位置');
+      var positionRow = row();
+      var positionSelect = document.createElement('select');
+      positionSelect.className = 'form-select';
+      positionSelect.style.flex = '1';
+      [['top-right', '右上'], ['top-left', '左上'], ['bottom-right', '右下'], ['bottom-left', '左下']].forEach(function (pair) {
+        var option = document.createElement('option');
+        option.value = pair[0];
+        option.textContent = pair[1];
+        positionSelect.appendChild(option);
+      });
+      positionSelect.addEventListener('change', function () {
+        var clazz = 'vz-menu-' + positionSelect.value;
+        btn.className = 'vz-menu-btn ' + clazz + (coarse ? ' vz-menu-touch' : '');
+        panel.className = 'vz-menu-panel ' + clazz;
+        report();
+      });
+      positionRow.appendChild(positionSelect);
 
       var colorBody = section('色');
       // 要素別。既定は「対象なし」で何も出さない。選ぶとその項目の色入力が出る。
@@ -1282,8 +1367,9 @@ body.vz-longpress, body.vz-longpress * {
      * 色の上書き。viz.chart は documentElement の computed style から --vz-* を
      * 読むので、ルートに設定する(メニューはフレームの外なので内容にしか効かない)。
      */
-    function overrideColor(key, value) {
-      document.documentElement.style.setProperty('--vz-' + key, value);
+    function overrideColor(token, value) {
+      document.documentElement.style.setProperty(token, value);
+      appliedColors[token] = value;
       charts().forEach(function (c) { c.update(c.config, true); });
     }
 
@@ -1294,19 +1380,39 @@ body.vz-longpress, body.vz-longpress * {
      */
     function overrideFont(fonts) {
       var root = document.documentElement;
-      if (fonts.family !== undefined && fonts.family !== '') root.style.setProperty('--vz-font', fonts.family);
       var roles = fonts.role === 'all' || fonts.role === undefined
         ? ['title', 'label', 'tick']
         : [fonts.role];
+      if (fonts.family !== undefined && fonts.family !== '') {
+        if (fonts.role === 'all' || fonts.role === undefined) {
+          root.style.setProperty('--vz-font', fonts.family);
+          appliedFonts['--vz-font'] = fonts.family;
+        }
+        roles.forEach(function (role) {
+          root.style.setProperty('--vz-font-' + role + '-family', fonts.family);
+          appliedFonts['--vz-font-' + role + '-family'] = fonts.family;
+        });
+      }
       if (fonts.size !== undefined && fonts.size > 0) {
         if (fonts.role === 'all' || fonts.role === undefined) {
           root.style.setProperty('--vz-font-size', fonts.size + 'px');
+          appliedFonts['--vz-font-size'] = fonts.size + 'px';
         }
         roles.forEach(function (role) {
           root.style.setProperty('--vz-font-' + role, fonts.size + 'px');
+          appliedFonts['--vz-font-' + role] = fonts.size + 'px';
         });
       }
+      appliedColors = {};
+      appliedFonts = {};
       charts().forEach(function (c) { c.update(c.config, true); });
+    }
+
+    /** 起動時: 保存された色とフォントをルートへ戻す。 */
+    function restoreOverrides() {
+      var root = document.documentElement;
+      Object.keys(appliedColors).forEach(function (token) { root.style.setProperty(token, appliedColors[token]); });
+      Object.keys(appliedFonts).forEach(function (token) { root.style.setProperty(token, appliedFonts[token]); });
     }
 
     function resetAll() {
@@ -1462,6 +1568,23 @@ body.vz-longpress, body.vz-longpress * {
       document.addEventListener('touchcancel', cancelHold, { passive: true });
     }
 
+    /** 表示幅(列に対する %)。内容を中央に寄せ、スケールを合わせる。 */
+    function applyWidth(percent) {
+      var target = content();
+      if (target === null) return;
+      if (typeof percent !== 'number' || percent <= 0 || percent >= 100) {
+        target.style.maxWidth = '';
+      } else {
+        target.style.maxWidth = percent + '%';
+      }
+      target.style.margin = '0 auto';
+      fit();
+      charts().forEach(function (c) { c.update(c.config, true); });
+    }
+
+    /** メニューの位置(四隅)。フレーム内メニューが無い場合は何もしない。 */
+    function applyMenuPosition() { /* メニューは親が持つので、フレーム側では何もしない */ }
+
     // 親からのコマンド。
     window.addEventListener('message', function (event) {
       var data = event.data;
@@ -1474,6 +1597,8 @@ body.vz-longpress, body.vz-longpress * {
       else if (command.type === 'font') overrideFont(command.fonts || {});
       else if (command.type === 'reset') resetAll();
       else if (command.type === 'scroll') { window.__dshVizScroll = command.value; fit(); }
+      else if (command.type === 'width') applyWidth(command.percent);
+      else if (command.type === 'position') applyMenuPosition(command.value);
       else if (command.type === 'export') runExport(command);
     });
 
@@ -1633,7 +1758,7 @@ body.vz-longpress, body.vz-longpress * {
     // 常に枠幅に縮尺される。
     svg.style.maxWidth = '100%';
     if (config.title) {
-      var t = el('text', { x: 0, y: 14, 'font-size': 12, fill: cssVar('--vz-text', '#000') });
+      var t = el('text', { x: 0, y: 14, 'font-size': 12, fill: cssVar('--vz-text', '#000'), 'data-editable': 'chart-title:' + (config.title || '') });
       t.textContent = config.title;
       svg.appendChild(t);
     }
@@ -1956,6 +2081,7 @@ body.vz-longpress, body.vz-longpress * {
         // Rotated along the left edge: the top-left corner belongs to the title,
         // and a horizontal label there collided with it.
         var yl = el('text', {
+          'data-editable': 'chart-ylabel:' + (config.yLabel || ''),
           x: 0, y: 0, 'font-size': 10, fill: cssVar('--vz-dim', '#666'),
           'text-anchor': 'middle',
           transform: 'translate(11 ' + (padT + plotH / 2) + ') rotate(-90)',
@@ -2078,7 +2204,11 @@ body.vz-longpress, body.vz-longpress * {
         var swatch = document.createElement('span');
         swatch.style.cssText = 'display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;background:' + color(si);
         item.appendChild(swatch);
-        item.appendChild(document.createTextNode(name));
+        // 凡例ラベルはダブルクリック/ダブルタップで編集できる。
+        var nameSpan = document.createElement('span');
+        nameSpan.setAttribute('data-editable', 'chart-legend:' + name);
+        nameSpan.textContent = name;
+        item.appendChild(nameSpan);
         legend.appendChild(item);
       });
       host.appendChild(legend);
@@ -2392,11 +2522,14 @@ body { padding: 14px 16px 16px; }`
   cursor: pointer; opacity: 0; transition: opacity .16s ease; font: inherit;
 }
 .vz-fm-frame:hover .vz-fm-btn, .vz-fm-btn[data-open="true"], .vz-fm-btn:focus-visible { opacity: 1; }
+.vz-fm-btn[data-position="top-left"] { left: 4px; right: auto; }
+.vz-fm-btn[data-position="bottom-right"] { top: auto; bottom: 4px; right: 4px; }
+.vz-fm-btn[data-position="bottom-left"] { top: auto; bottom: 4px; left: 4px; right: auto; }
 .vz-fm-haptic { position: absolute; inset: -8px; cursor: pointer; }
 .vz-fm-switch { position: absolute; width: 1px; height: 1px; margin: 0; visibility: hidden; pointer-events: none; }
 .vz-fm-panel {
   position: absolute; z-index: 31; top: 4px; right: 4px;
-  width: 268px; max-width: calc(100% - 8px); max-height: min(72vh, calc(100% - 8px));
+  width: 400px; max-width: calc(100% - 8px); max-height: min(72vh, calc(100% - 8px));
   box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain;
   padding: 40px 12px 10px; border-radius: 10px;
   background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary);
@@ -2406,6 +2539,9 @@ body { padding: 14px 16px 16px; }`
   display: none; transform-origin: top right;
 }
 .vz-fm-panel[data-open="true"] { display: block; }
+.vz-fm-panel[data-position="top-left"] { left: 4px; right: auto; transform-origin: top left; }
+.vz-fm-panel[data-position="bottom-right"] { top: auto; bottom: 4px; right: 4px; transform-origin: bottom right; }
+.vz-fm-panel[data-position="bottom-left"] { top: auto; bottom: 4px; left: 4px; transform-origin: bottom left; }
 /* 折り畳み見出し: タップで開閉する。 */
 .vz-fm-h {
   display: flex; align-items: center; gap: 6px; width: 100%;
@@ -2716,7 +2852,24 @@ body { padding: 14px 16px 16px; }`
      * @returns メニューの API と破棄関数。
      */
     function mountFrameMenu(outer, send) {
-      var state = { charts: [], zoom: 100, tableMode: false, collapsed: false }
+      // saved は viz.restore()(state の読み戻し)。zoom / tableMode / font /
+      // color / scroll を復元して、再描画後に読者が元の設定で見られるようにする。
+      var saved = (window.viz && window.viz.restore) ? (window.viz.restore() || {}) : {}
+      var state = {
+        charts: [],
+        zoom: typeof saved.zoom === 'number' && saved.zoom > 0 ? saved.zoom : 100,
+        tableMode: saved.tableMode === true,
+        collapsed: saved.collapsed === true,
+        font: {
+          family: typeof saved.fontFamily === 'string' ? saved.fontFamily : '',
+          size: typeof saved.fontSize === 'number' ? saved.fontSize : 0,
+          role: typeof saved.fontRole === 'string' ? saved.fontRole : 'title',
+        },
+        colors: saved.colors !== null && typeof saved.colors === 'object' ? saved.colors : {},
+        scroll: typeof saved.scroll === 'string' ? saved.scroll : 'none',
+        width: typeof saved.width === 'number' ? saved.width : 0,
+        position: typeof saved.position === 'string' ? saved.position : 'top-right',
+      }
       var ios = /iP(hone|ad|od)/.test(navigator.userAgent)
       var coarse = false
       try { coarse = matchMedia('(pointer: coarse)').matches } catch (e) { /* no matchMedia */ }
@@ -2768,6 +2921,10 @@ body { padding: 14px 16px 16px; }`
       var open = false
       function setOpen(next) {
         open = next
+        // 復元した幅・位置を反映する。
+        if (state.width > 0 && state.width < 100) outer.style.maxWidth = state.width + '%'
+        btn.setAttribute('data-position', state.position)
+        panel.setAttribute('data-position', state.position)
         panel.setAttribute('data-open', next ? 'true' : 'false')
         btn.setAttribute('data-open', next ? 'true' : 'false')
         btn.setAttribute('aria-expanded', next ? 'true' : 'false')
@@ -2797,7 +2954,7 @@ body { padding: 14px 16px 16px; }`
       /** 折り畳みセクションの開閉状態(既定は閉)。 */
       var opened = {}
       /** 文字設定。 */
-      var font = { family: '', size: 0, role: 'all' }
+      var font = state.font
 
       /** 見出しをタップで開閉するセクションを作る。@returns 中身を入れる要素。 */
       function section(title, key) {
@@ -2994,6 +3151,49 @@ body { padding: 14px 16px 16px; }`
         sizeRow.appendChild(sizeValue)
         textBody.appendChild(sizeRow)
 
+        // 幅: フレームの表示幅(列の 40-100%)。既定は列いっぱい。
+        var widthBody = section('幅', 'width')
+        var widthRow = el('div', 'vz-fm-row')
+        var widthLabel = el('span', 'vz-fm-label', '表示幅')
+        var width = el('input')
+        width.type = 'range'
+        width.min = '40'
+        width.max = '100'
+        width.step = '5'
+        width.value = String(state.width === 0 ? 100 : state.width)
+        var widthValue = el('span', 'vz-fm-label', width.value + '%')
+        width.addEventListener('input', function () {
+          state.width = Number(width.value)
+          widthValue.textContent = state.width + '%'
+          outer.style.maxWidth = state.width >= 100 ? '100%' : state.width + '%'
+          send({ type: 'width', percent: state.width })
+        })
+        widthRow.appendChild(widthLabel)
+        widthRow.appendChild(width)
+        widthRow.appendChild(widthValue)
+        widthBody.appendChild(widthRow)
+
+        // 位置: メニューを四隅のどこへ置くか。
+        var positionBody = section('位置', 'position')
+        var positionRow = el('div', 'vz-fm-row')
+        var positionLabel = el('span', 'vz-fm-label', 'メニュー位置')
+        var position = el('select', 'vz-fm-select')
+        ;[['top-right', '右上'], ['top-left', '左上'], ['bottom-right', '右下'], ['bottom-left', '左下']].forEach(function (pair) {
+          var option = el('option', undefined, pair[1])
+          option.value = pair[0]
+          if (state.position === pair[0]) option.selected = true
+          position.appendChild(option)
+        })
+        position.addEventListener('change', function () {
+          state.position = position.value
+          btn.setAttribute('data-position', state.position)
+          panel.setAttribute('data-position', state.position)
+          send({ type: 'position', value: state.position })
+        })
+        positionRow.appendChild(positionLabel)
+        positionRow.appendChild(position)
+        positionBody.appendChild(positionRow)
+
         // 色: 使われている要素だけをプルダウンで選び、色を決める
         var colorBody = section('色', 'color')
         var colorRow = el('div', 'vz-fm-row')
@@ -3021,7 +3221,12 @@ body { padding: 14px 16px 16px; }`
           state.zoom = 100
           font.family = ''
           font.size = 0
-          font.role = 'all'
+          font.role = 'title'
+          state.width = 0
+          state.position = 'top-right'
+          outer.style.maxWidth = '100%'
+          btn.setAttribute('data-position', 'top-right')
+          panel.setAttribute('data-position', 'top-right')
           send({ type: 'reset' })
           build()
         }))
@@ -3034,6 +3239,7 @@ body { padding: 14px 16px 16px; }`
         ;['none', 'x', 'y', 'both'].forEach(function (mode) {
           var option = el('option', undefined, mode)
           option.value = mode
+          if (state.scroll === mode) option.selected = true
           scroll.appendChild(option)
         })
         scroll.addEventListener('change', function () {
