@@ -3391,6 +3391,17 @@ body { padding: 14px 16px 16px; }`
       const frameRef = React.useRef(null)
       const srcDoc = React.useMemo(() => buildSidebarDoc(source), [source])
 
+      // タブが閉じた(レコードが消えた)ら、フェンスへ戻す合図を出す。
+      React.useEffect(() => {
+        const signal = info.tab.signal
+        if (signal === undefined) return undefined
+        const onAbort = () => {
+          window.dispatchEvent(new CustomEvent('dshVizSidebarClosed', { detail: { address } }))
+        }
+        signal.addEventListener('abort', onAbort)
+        return () => signal.removeEventListener('abort', onAbort)
+      }, [address])
+
       React.useEffect(() => {
         let live = true
         const url = new URL('api/visualize/file', document.baseURI)
@@ -3442,6 +3453,15 @@ body { padding: 14px 16px 16px; }`
           onClick: save,
           style: sidebarButtonStyle(true),
         }, busy ? '保存中…' : '保存') : null,
+        h('button', {
+          key: 'fold',
+          type: 'button',
+          onClick: () => {
+            // 右カラム自体を畳む(タブは残る)。
+            if (typeof window.__dshVisualizeFoldRightbar === 'function') window.__dshVisualizeFoldRightbar()
+          },
+          style: sidebarButtonStyle(false),
+        }, '領域を畳む'),
         h('button', {
           key: 'close',
           type: 'button',
@@ -3566,6 +3586,23 @@ body { padding: 14px 16px 16px; }`
           })
           .catch(error => { if (live) setFailure(String(error && error.message ? error.message : error)) })
         return () => { live = false }
+      }, [payload === undefined ? '' : payload.path])
+
+      // 右サイドバーのタブが閉じたら、このフェンスを本文表示へ戻す。
+      React.useEffect(() => {
+        if (typeof window === 'undefined') return undefined
+        const onClosed = event => {
+          const detail = event.detail
+          if (detail === undefined || typeof detail.address !== 'string') return
+          const title = String(payload === undefined ? '' : payload.path).replace(/\\/g, '/').split('/').pop()?.replace(/\.html$/i, '') ?? ''
+          const session = payload === undefined ? '' : (sessionOf(payload.path) ?? '')
+          const expected = 'dsh-resource://visualize/' + session + '/' + title
+          if (detail.address !== expected) return
+          setInSidebar(false)
+          setOpen(true)
+        }
+        window.addEventListener('dshVizSidebarClosed', onClosed)
+        return () => window.removeEventListener('dshVizSidebarClosed', onClosed)
       }, [payload === undefined ? '' : payload.path])
 
       React.useEffect(() => {
@@ -3921,6 +3958,13 @@ body { padding: 14px 16px 16px; }`
           window.__dshVisualizeSidebar = address => {
             scope.sidebarRight.openResource(address, { destination: 'sidebar' })
           }
+          // 右カラム自体を畳む。layout は inject 宣言が要る(実測)ので任意依存で。
+          ctx.inject(['layout'], layoutScope => {
+            window.__dshVisualizeFoldRightbar = () => {
+              layoutScope.layout.closeRightbar()
+            }
+            return () => { window.__dshVisualizeFoldRightbar = undefined }
+          })
           if (typeof window.__dshVisualizePendingAddress === 'string') {
             window.__dshVisualizeSidebar(window.__dshVisualizePendingAddress)
             window.__dshVisualizePendingAddress = undefined
