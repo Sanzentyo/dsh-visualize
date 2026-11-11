@@ -446,6 +446,10 @@ body.vz-longpress, body.vz-longpress * {
     if (typeof saved.scroll === 'string' && saved.scroll !== '') {
       window.__dshVizScroll = saved.scroll;
     }
+    // 表/グラフの選択も戻す(再描画の後に効かせる)。
+    if (saved.tableMode === true && typeof applyView === 'function') {
+      applyView(true);
+    }
     if (saved.colors !== null && typeof saved.colors === 'object') {
       Object.keys(saved.colors).forEach(function (token) {
         var value = saved.colors[token];
@@ -2918,10 +2922,11 @@ body { padding: 14px 16px 16px; }`
      * @param send - フレームへコマンドを送る関数。
      * @returns メニューの API と破棄関数。
      */
-    function mountFrameMenu(outer, send) {
+    function mountFrameMenu(outer, send, restored) {
       // saved は viz.restore()(state の読み戻し)。zoom / tableMode / font /
       // color / scroll を復元して、再描画後に読者が元の設定で見られるようにする。
-      var saved = (window.viz && window.viz.restore) ? (window.viz.restore() || {}) : {}
+      // 親ページに viz は無い(実測)。復元値は VisualizeView が fetch して渡す。
+      var saved = restored !== null && typeof restored === 'object' ? restored : {}
       var state = {
         charts: [],
         zoom: typeof saved.zoom === 'number' && saved.zoom > 0 ? saved.zoom : 100,
@@ -3555,6 +3560,8 @@ body { padding: 14px 16px 16px; }`
       const frameRef = React.useRef(null)
       // フレームの外に置くメニュー(ハンバーガー・haptic)と、その載せ先。
       const menuApi = React.useRef(null)
+      // 復元値は fetch 後に決まる。メニューは最新値で初期化したいので ref で渡す。
+      const restoredRef = React.useRef(null)
       const outerRef = React.useRef(null)
       const payloadPath = payload === undefined ? '' : payload.path
 
@@ -3582,6 +3589,7 @@ body { padding: 14px 16px 16px; }`
           .then(([text, state]) => {
             if (!live) return
             setRestored(state)
+            restoredRef.current = state
             setHtml(text)
           })
           .catch(error => { if (live) setFailure(String(error && error.message ? error.message : error)) })
@@ -3658,7 +3666,7 @@ body { padding: 14px 16px 16px; }`
           const frame = frameRef.current
           if (frame === null) return
           frame.contentWindow?.postMessage({ vizCommand: command }, '*')
-        })
+        }, restoredRef.current)
         menuApi.current = api
         return () => {
           menuApi.current = null
