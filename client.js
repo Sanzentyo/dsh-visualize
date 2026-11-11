@@ -76,7 +76,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@1247d5bfe2 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@7db36e7445 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -204,6 +204,17 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 }
 
 /* ── frame menu (the runtime creates these) ───────────────────────────── */
+/* メニューの色は内容の上書き(--vz-*)から独立している。読者が本文の色を
+   変えてもメニューは読めるままにするため、専用トークン --vzm-* を持つ。
+   既定値は下の :root でテーマの値から一度だけ写す。 */
+:root {
+  --vzm-surface: var(--vz-surface);
+  --vzm-text: var(--vz-text);
+  --vzm-dim: var(--vz-dim);
+  --vzm-border: var(--vz-border);
+  --vzm-accent: var(--vz-accent);
+}
+
 /* 常在しない。操作で出す: ホバーのある環境はボタン自身(右上の 30px 程度)の
    hover で出る。タッチは長押し(500ms)。閉じたら 1 秒だけ見せて消す。
    色はテーマのトークン(var(--vz-*))を継承する — 上書きは .vz-content だけに
@@ -212,8 +223,8 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 .vz-menu-btn {
   position: absolute; z-index: 2147483647;
   width: 30px; height: 30px;
-  border-radius: 7px; border: 1px solid var(--vz-border);
-  background: var(--vz-surface); color: var(--vz-dim);
+  border-radius: 7px; border: 1px solid var(--vzm-border);
+  background: var(--vzm-surface); color: var(--vzm-dim);
   cursor: pointer; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
   opacity: 0; transition: opacity .18s ease, border-color .16s ease;
@@ -243,8 +254,8 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
      一体のヘッダー行になる。内容はボタンの行(30px)の下から始める。 */
   padding: 4px 12px 10px 12px;
   border-radius: 10px;
-  background: var(--vz-surface); color: var(--vz-text);
-  border: 1px solid var(--vz-border);
+  background: var(--vzm-surface); color: var(--vzm-text);
+  border: 1px solid var(--vzm-border);
   box-shadow: 0 8px 24px rgb(0 0 0 / .25);
   font-size: 13px;
   /* ボタンから折り畳みアニメーションで展開する。 */
@@ -269,40 +280,31 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 .vz-menu-content { padding-top: 30px; }
 .vz-menu-content-bottom { padding-top: 0; padding-bottom: 30px; }
 .vz-menu-h {
-  display: flex; align-items: center; gap: 6px; width: 100%;
-  padding: 7px 2px; margin: 0;
-  border: 0; border-top: 1px solid var(--vz-border);
-  background: transparent; color: var(--vz-text);
-  font: inherit; font-size: .9em; font-weight: 600; text-align: left; cursor: pointer;
+  padding: 8px 0 4px; margin: 0;
+  border-top: 1px solid var(--vzm-border);
+  color: var(--vzm-text); font-size: .88em; font-weight: 600; letter-spacing: .02em;
 }
 .vz-menu-h:first-of-type { border-top: 0; }
-.vz-menu-h::after {
-  content: ''; margin-left: auto; width: 0; height: 0;
-  border-left: 4px solid transparent; border-right: 4px solid transparent;
-  border-top: 5px solid currentColor; opacity: .7;
-  transition: transform .16s ease;
-}
-.vz-menu-h[aria-expanded="true"]::after { transform: rotate(180deg); }
-.vz-menu-body { padding: 2px 0 8px 8px; }
+.vz-menu-body { padding: 0 0 6px 0; }
 .vz-menu-panel > .vz-menu-h:first-child, .vz-menu-content > .vz-menu-h:first-child { margin-top: 0; }
 .vz-menu-row { display: flex; align-items: center; gap: 6px; margin: 4px 0; flex-wrap: wrap; }
-.vz-menu-label { flex: 1 1 auto; color: var(--vz-dim); font-size: .92em; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.vz-menu-label { flex: 1 1 auto; color: var(--vzm-dim); font-size: .92em; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .vz-menu-check { display: flex; align-items: center; gap: 6px; font-size: .92em; cursor: pointer; }
 .vz-menu-panel .btn { min-height: 36px; padding: 4px 10px; font-size: .9em; }
 /* COPY ⇄ DL のスイッチ: ネイティブ checkbox をスイッチ風に描く。 */
 .vz-switch {
   appearance: none; -webkit-appearance: none;
   flex: 0 0 auto; width: 38px; height: 22px; margin: 0;
-  border-radius: 999px; border: 1px solid var(--vz-border);
-  background: var(--vz-border); position: relative; cursor: pointer;
+  border-radius: 999px; border: 1px solid var(--vzm-border);
+  background: var(--vzm-border); position: relative; cursor: pointer;
   transition: background .16s ease;
 }
 .vz-switch::after {
   content: ''; position: absolute; top: 2px; left: 2px;
   width: 16px; height: 16px; border-radius: 50%;
-  background: var(--vz-surface); transition: transform .16s ease;
+  background: var(--vzm-surface); transition: transform .16s ease;
 }
-.vz-switch:checked { background: var(--vz-accent); border-color: var(--vz-accent); }
+.vz-switch:checked { background: var(--vzm-accent); border-color: var(--vzm-accent); }
 .vz-switch:checked::after { transform: translateX(16px); }
 /* 長押しの間だけ本文の選択・コールアウトを抑止する(指を離すと解除)。 */
 body.vz-longpress, body.vz-longpress * {
@@ -477,29 +479,14 @@ body.vz-longpress, body.vz-longpress * {
       : 'vz-menu-content';
     panel.appendChild(content);
 
-    // 見出しは折り畳み式: タップで開閉し、既定は閉じる(パネルが長くならない)。
-    var openedSections = {};
-    function section(title, key) {
-      var body = document.createElement('div');
-      body.className = 'vz-menu-body';
-      body.style.display = openedSections[key] === true ? 'block' : 'none';
-      var h = document.createElement('button');
-      h.type = 'button';
+    // 区画見出し(開閉なし)。パネルは縦にスクロールできる。
+    function section(title) {
+      var h = document.createElement('div');
       h.className = 'vz-menu-h';
       h.textContent = title;
-      h.setAttribute('aria-expanded', openedSections[key] === true ? 'true' : 'false');
-      h.addEventListener('click', function () {
-        openedSections[key] = openedSections[key] !== true;
-        body.style.display = openedSections[key] === true ? 'block' : 'none';
-        h.setAttribute('aria-expanded', openedSections[key] === true ? 'true' : 'false');
-      });
       content.appendChild(h);
-      content.appendChild(body);
-      currentBody = body;
-      return body;
+      currentBody = content;
     }
-    // 行は現在のセクション(body)へ入れる。body が無ければ content へ。
-    var currentBody = null;
     function row() {
       var r = document.createElement('div');
       r.className = 'vz-menu-row';
@@ -613,7 +600,7 @@ body.vz-longpress, body.vz-longpress * {
     function build() {
       content.textContent = '';
       if (charts().length > 0) {
-        var viewBody = section('表示', 'view');
+        var viewBody = section('表示');
         var viewRow = row();
         var chartBtn = button(tableMode ? 'グラフ' : 'グラフ ✓', function () {
           tableMode = false;
@@ -631,7 +618,7 @@ body.vz-longpress, body.vz-longpress * {
         viewRow.appendChild(tableBtn);
 
         if (!tableMode) {
-          var exportBody = section('コピー / ダウンロード', 'export');
+          var exportBody = section('コピー / ダウンロード');
           // 形式のプルダウン + COPY/DL トグル + 実行ボタン 1 つ。
           var FORMATS = [
             ['chart-png', 'グラフ(透過 PNG)'],
@@ -789,7 +776,7 @@ body.vz-longpress, body.vz-longpress * {
         }
       }
 
-      var zoomBody = section('拡大率', 'zoom');
+      var zoomBody = section('拡大率');
       var zoomRow = row();
       var zoom = document.createElement('input');
       zoom.type = 'range';
@@ -812,8 +799,8 @@ body.vz-longpress, body.vz-longpress * {
       zoomRow.appendChild(zoomLabel);
 
       // 文字: フォントファミリ・サイズ・対象の役割。
-      var textBody = section('文字', 'text');
-      var fontState = { family: '', size: 0, role: 'all' };
+      var textBody = section('文字');
+      var fontState = { family: '', size: 0, role: 'title' };
       var roleRow = row();
       var roleLabel = document.createElement('span');
       roleLabel.className = 'vz-menu-label';
@@ -821,10 +808,11 @@ body.vz-longpress, body.vz-longpress * {
       var roleSelect = document.createElement('select');
       roleSelect.className = 'form-select';
       roleSelect.style.flex = '1';
-      [['all', 'すべて'], ['title', 'タイトル'], ['label', '軸ラベル'], ['tick', '目盛り']].forEach(function (pair) {
+      [['title', 'タイトル'], ['label', '軸ラベル'], ['tick', '目盛り'], ['all', 'すべて']].forEach(function (pair) {
         var option = document.createElement('option');
         option.value = pair[0];
         option.textContent = pair[1];
+        if (fontState.role === pair[0]) option.selected = true;
         roleSelect.appendChild(option);
       });
       roleSelect.addEventListener('change', function () { fontState.role = roleSelect.value; });
@@ -885,27 +873,76 @@ body.vz-longpress, body.vz-longpress * {
         report();
       }
 
-      var colorBody = section('色', 'color');
-      [['text', '--vz-text'], ['surface', '--vz-surface'], ['accent', '--vz-accent']].forEach(function (pair) {
-        var cr = row();
-        var label = document.createElement('span');
-        label.className = 'vz-menu-label';
-        label.textContent = pair[0];
-        var input = document.createElement('input');
-        input.type = 'color';
-        input.value = '#000000';
-        input.addEventListener('input', function () {
-          // viz.chart は documentElement の computed style から --vz-* を読む。
-          // .vz-content に置いても反映されない(実測)。ルートへ設定して再描画する。
-          root.style.setProperty(pair[1], input.value);
-          charts().forEach(function (c) { c.update(c.config, true); });
-          report();
-        });
-        cr.appendChild(label);
-        cr.appendChild(input);
+      var colorBody = section('色');
+      // 要素別。既定は「対象なし」で何も出さない。選ぶとその項目の色入力が出る。
+      var COLOR_TARGETS = [
+        ['title', 'タイトル文字', '--vz-title'],
+        ['axis', '軸ラベル', '--vz-axis'],
+        ['tick', '目盛り', '--vz-tick'],
+        ['legend', '凡例', '--vz-legend'],
+        ['text', '本文', '--vz-text'],
+        ['dim', '補助文字', '--vz-dim'],
+        ['surface', '面', '--vz-surface'],
+        ['accent', '強調', '--vz-accent'],
+        ['border', '枠線', '--vz-border'],
+      ];
+      var colorTargetRow = row();
+      var colorTargetLabel = document.createElement('span');
+      colorTargetLabel.className = 'vz-menu-label';
+      colorTargetLabel.textContent = '対象';
+      var colorTarget = document.createElement('select');
+      colorTarget.className = 'form-select';
+      colorTarget.style.flex = '1';
+      var noneOption = document.createElement('option');
+      noneOption.value = '';
+      noneOption.textContent = '対象なし';
+      colorTarget.appendChild(noneOption);
+      COLOR_TARGETS.forEach(function (item) {
+        var option = document.createElement('option');
+        option.value = item[0];
+        option.textContent = item[1];
+        colorTarget.appendChild(option);
+      });
+      colorTargetRow.appendChild(colorTargetLabel);
+      colorTargetRow.appendChild(colorTarget);
+
+      // 選んだ項目の色入力。対象なしのときは行ごと隠す。
+      var colorValueRow = row();
+      colorValueRow.style.display = 'none';
+      var colorInput = document.createElement('input');
+      colorInput.type = 'color';
+      colorInput.value = '#000000';
+      colorValueRow.appendChild(colorInput);
+
+      colorTarget.addEventListener('change', function () {
+        var selected = COLOR_TARGETS.filter(function (item) { return item[0] === colorTarget.value; })[0];
+        if (selected === undefined) {
+          colorValueRow.style.display = 'none';
+          return;
+        }
+        colorValueRow.style.display = '';
+        colorInput.value = cssVarColor(selected[2]);
+        colorInput.setAttribute('data-token', selected[2]);
+      });
+      colorInput.addEventListener('input', function () {
+        var token = colorInput.getAttribute('data-token');
+        if (token === null) return;
+        root.style.setProperty(token, colorInput.value);
+        charts().forEach(function (c) { c.update(c.config, true); });
+        report();
       });
 
-      var resetBody = section('リセット', 'reset');
+      /** 現在の実効色(未設定なら既定のトークン値)。 */
+      function cssVarColor(token) {
+        var value = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+        if (value !== '' && /^#/.test(value)) return value;
+        var fallback = token === '--vz-title' || token === '--vz-text' ? '#e8e8e8'
+          : token === '--vz-tick' || token === '--vz-dim' || token === '--vz-axis' ? '#9a9a9a'
+            : '#000000';
+        return fallback;
+      }
+
+      var resetBody = section('リセット');
       var resetRow = row();
       resetRow.appendChild(button('デフォルトに戻す', function () {
         // 誤設定からの復帰: 拡大率・色・スクロール・表示モードを既定へ。
@@ -928,7 +965,7 @@ body.vz-longpress, body.vz-longpress * {
         report();
       }));
 
-      var scrollBody = section('スクロール', 'scroll');
+      var scrollBody = section('スクロール');
       var scrollRow = row();
       var select = document.createElement('select');
       select.className = 'form-select';
@@ -1470,10 +1507,18 @@ body.vz-longpress, body.vz-longpress * {
     var texts = svg.querySelectorAll('text');
     Array.prototype.forEach.call(texts, function (node) {
       var size = Number(node.getAttribute('font-size'));
-      if (!isFinite(size) || size <= 0) return;
-      var role = size >= 12 ? 'title' : size >= 11 ? 'label' : 'tick';
-      node.removeAttribute('font-size');
-      node.style.fontSize = 'var(--vz-font-' + role + ', ' + size + 'px)';
+      var role = isFinite(size) && size >= 12 ? 'title' : isFinite(size) && size >= 11 ? 'label' : 'tick';
+      if (isFinite(size) && size > 0) {
+        node.removeAttribute('font-size');
+        node.style.fontSize = 'var(--vz-font-' + role + ', ' + size + 'px)';
+      }
+      // 色も役割別の変数へ。属性で直書きのままだと要素別の上書きが効かない。
+      var fill = node.getAttribute('fill');
+      if (fill !== null && fill !== '' && fill !== 'none') {
+        node.removeAttribute('fill');
+        var token = role === 'title' ? '--vz-title' : role === 'label' ? '--vz-axis' : '--vz-tick';
+        node.style.fill = 'var(' + token + ', ' + fill + ')';
+      }
     });
     return svg;
   }
