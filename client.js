@@ -76,7 +76,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@cb57937485 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@cdbd794c77 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -3389,12 +3389,13 @@ body { padding: 14px 16px 16px; }`
       const session = parts[0] ?? ''
       const title = parts[1] ?? ''
       const [source, setSource] = React.useState(undefined)
+      const [restored, setRestored] = React.useState(null)
       const [draft, setDraft] = React.useState('')
       const [editing, setEditing] = React.useState(false)
       const [busy, setBusy] = React.useState(false)
       const [note, setNote] = React.useState('')
       const frameRef = React.useRef(null)
-      const srcDoc = React.useMemo(() => buildSidebarDoc(source), [source])
+      const srcDoc = React.useMemo(() => buildSidebarDoc(source, restored), [source, restored])
 
       // タブが閉じた(レコードが消えた)ら、フェンスへ戻す合図を出す。
       React.useEffect(() => {
@@ -3412,9 +3413,23 @@ body { padding: 14px 16px 16px; }`
         const url = new URL('api/visualize/file', document.baseURI)
         url.searchParams.set('session', session)
         url.searchParams.set('title', title)
-        fetch(url.toString())
-          .then(response => (response.ok ? response.text() : Promise.reject(new Error('HTTP ' + response.status))))
-          .then(text => { if (live) { setSource(text); setDraft(text) } })
+        const stateUrl = new URL('api/visualize/state', document.baseURI)
+        stateUrl.searchParams.set('session', session)
+        stateUrl.searchParams.set('title', title)
+        const readState = fetch(stateUrl.toString())
+          .then(response => (response.ok ? response.text() : 'null'))
+          .then(text => { try { return JSON.parse(text) } catch { return null } })
+          .catch(() => null)
+        Promise.all([
+          fetch(url.toString()).then(response => (response.ok ? response.text() : Promise.reject(new Error('HTTP ' + response.status)))),
+          readState,
+        ])
+          .then(([text, state]) => {
+            if (!live) return
+            setRestored(state)
+            setSource(text)
+            setDraft(text)
+          })
           .catch(error => { if (live) { setSource(null); setNote(String(error.message ?? error)) } })
         return () => { live = false }
       }, [session, title])
@@ -3531,12 +3546,13 @@ body { padding: 14px 16px 16px; }`
     }
 
     /** サイドバー用の文書。フレームと同じテーマとランタイムを渡す。 */
-    function buildSidebarDoc(fragment) {
+    function buildSidebarDoc(fragment, restored) {
       if (typeof fragment !== 'string') return '<!doctype html><body></body>'
       return '<!doctype html><html><head><meta charset="utf-8">'
         + '<meta name="viewport" content="width=device-width, initial-scale=1">'
         + '<style>' + themeCss() + '</style><style>' + FRAME_CSS + '</style></head><body>'
         + '<script>window.__dshVizScroll="none"</script>'
+        + '<script>window.__dshVizState=' + JSON.stringify(restored ?? null) + '</script>'
         + '<script>' + FRAME_SCRIPT + '</script>'
         + fragment + '</body></html>'
     }
