@@ -76,7 +76,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@7db36e7445 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@b165449742 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -861,9 +861,14 @@ body.vz-longpress, body.vz-longpress * {
 
       /** 文字の上書きを適用し、全チャートを再描画する。 */
       function applyFont() {
-        if (fontState.family !== '') root.style.setProperty('--vz-font', fontState.family);
+        var roles = fontState.role === 'all' ? ['title', 'label', 'tick'] : [fontState.role];
+        if (fontState.family !== '') {
+          if (fontState.role === 'all') root.style.setProperty('--vz-font', fontState.family);
+          roles.forEach(function (role) {
+            root.style.setProperty('--vz-font-' + role + '-family', fontState.family);
+          });
+        }
         if (fontState.size > 0) {
-          var roles = fontState.role === 'all' ? ['title', 'label', 'tick'] : [fontState.role];
           if (fontState.role === 'all') root.style.setProperty('--vz-font-size', fontState.size + 'px');
           roles.forEach(function (role) {
             root.style.setProperty('--vz-font-' + role, fontState.size + 'px');
@@ -957,6 +962,9 @@ body.vz-longpress, body.vz-longpress * {
         root.style.removeProperty('--vz-font-title');
         root.style.removeProperty('--vz-font-label');
         root.style.removeProperty('--vz-font-tick');
+        root.style.removeProperty('--vz-font-title-family');
+        root.style.removeProperty('--vz-font-label-family');
+        root.style.removeProperty('--vz-font-tick-family');
         window.__dshVizScroll = 'none';
         tableMode = false;
         if (typeof fit === 'function') fit();
@@ -1519,6 +1527,8 @@ body.vz-longpress, body.vz-longpress * {
         var token = role === 'title' ? '--vz-title' : role === 'label' ? '--vz-axis' : '--vz-tick';
         node.style.fill = 'var(' + token + ', ' + fill + ')';
       }
+      // フォントも役割別に。'all' のときだけフォールバックが本文の --vz-font になる。
+      node.style.fontFamily = 'var(--vz-font-' + role + '-family, var(--vz-font))';
     });
     return svg;
   }
