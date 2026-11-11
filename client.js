@@ -76,7 +76,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@f934320825 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@1280fd57ab (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -962,6 +962,62 @@ body.vz-longpress, body.vz-longpress * {
         report();
       });
       positionRow.appendChild(positionSelect);
+
+      // グラフ: グラフがあるときだけ出す専用の設定(系列の凡例・系列色)。
+      if (charts().length > 0) {
+        var chartBody = section('グラフ');
+        var chartRow = row();
+        var chartLabel = document.createElement('span');
+        chartLabel.className = 'vz-menu-label';
+        chartLabel.textContent = '対象';
+        var chartSelect = document.createElement('select');
+        chartSelect.className = 'form-select';
+        chartSelect.style.flex = '1';
+        charts().forEach(function (c, index) {
+          var option = document.createElement('option');
+          option.value = String(index);
+          option.textContent = (c.config && c.config.title) || 'グラフ ' + (index + 1);
+          chartSelect.appendChild(option);
+        });
+        chartRow.appendChild(chartLabel);
+        chartRow.appendChild(chartSelect);
+
+        // 凡例の表示切替(そのグラフだけ)。
+        var legendRow = row();
+        var legendLabel = document.createElement('span');
+        legendLabel.className = 'vz-menu-label';
+        legendLabel.textContent = '凡例';
+        var legendToggle = document.createElement('input');
+        legendToggle.type = 'checkbox';
+        legendToggle.className = 'vz-fm-check';
+        legendToggle.checked = true;
+        legendToggle.addEventListener('change', function () {
+          var entry = charts()[Number(chartSelect.value) || 0];
+          if (entry === undefined) return;
+          entry.config.legendToggle = legendToggle.checked;
+          entry.update(entry.config, true);
+        });
+        legendRow.appendChild(legendLabel);
+        legendRow.appendChild(legendToggle);
+
+        // 系列色(系列 1-6 をその場で変える)。
+        var seriesRow = row();
+        var seriesLabel = document.createElement('span');
+        seriesLabel.className = 'vz-menu-label';
+        seriesLabel.textContent = '系列色';
+        var seriesInput = document.createElement('input');
+        seriesInput.type = 'color';
+        seriesInput.value = '#3b82f6';
+        seriesInput.addEventListener('input', function () {
+          var index = Number(chartSelect.value) || 0;
+          root.style.setProperty('--viz-series-1', seriesInput.value);
+          charts().forEach(function (c) { c.update(c.config, true); });
+        });
+        seriesRow.appendChild(seriesLabel);
+        seriesRow.appendChild(seriesInput);
+
+
+      }
 
       var colorBody = section('色');
       // 要素別。既定は「対象なし」で何も出さない。選ぶとその項目の色入力が出る。

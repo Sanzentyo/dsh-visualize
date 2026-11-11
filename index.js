@@ -81,6 +81,30 @@ async function writeAsset(dir, asset) {
  * Register the `visualize` tool.
  * @param ctx - context carrying the tool registry.
  */
+/** セッション横断の既定値ファイル名(visualize ストア直下)。 */
+const DEFAULTS_FILE = '_defaults.json'
+
+/**
+ * 既定値の保存先。
+ * @returns an absolute path.
+ */
+function defaultsPath() {
+  const home = process.env.DSH_HOME ?? join(homedir(), '.dsh')
+  return join(home, DEFAULT_DIR, DEFAULTS_FILE)
+}
+
+/**
+ * 既定値を読む。壊れていれば空。
+ * @returns the stored object.
+ */
+async function readDefaults() {
+  try {
+    return JSON.parse(await readFile(defaultsPath(), 'utf8'))
+  } catch {
+    return {}
+  }
+}
+
 export function apply(ctx) {
   // The frame has an opaque origin, so it posts its interaction state to the
   // parent page, which relays it here. One route keeps the browser half free of
@@ -420,4 +444,60 @@ export function apply(ctx) {
       }
     },
   }))
+
+  ctx.tools.register(defineTool({
+    name: 'visualize_defaults',
+    description: 'Read or change the defaults every visualization starts from. '
+      + 'get returns the stored object; set merges the given keys and returns the result; '
+      + 'reset clears them. Keys mirror the menu: mode, card, scroll, width, '
+      + 'zoom (50-200), fontFamily, fontSize, fontRole, colors (token to colour). '
+      + 'The defaults live at <home>/visualize/_defaults.json, so they apply to every Session '
+      + 'and survive restarts.',
+    parameters: {
+      action: {
+        type: 'string',
+        enum: ['get', 'set', 'reset'],
+        required: true,
+        description: 'get reads, set merges the supplied keys, reset clears everything.',
+      },
+      values: {
+        type: 'object',
+        additionalProperties: true,
+        description: 'Keys to merge when action is set (mode, card, scroll, width, zoom, '
+          + 'fontFamily, fontSize, fontRole, colors).',
+      },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          defaults: { type: 'object', additionalProperties: true, required: true },
+          path: { type: 'string', required: true },
+        },
+      },
+      render: (_args, value) => [{ type: 'text', text: JSON.stringify(value.defaults) }],
+    },
+    async execute(args) {
+      const path = defaultsPath()
+      const current = await readDefaults()
+      if (args.action === 'get') return { defaults: current, path }
+      if (args.action === 'reset') {
+        await mkdir(dirname(path), { recursive: true })
+        await writeFile(path, '{}', 'utf8')
+        return { defaults: {}, path }
+      }
+      const patch = args.values !== null && typeof args.values === 'object' ? args.values : {}
+      // 既知のキーだけを受け取る(タイポを既定値に混ぜない)。
+      const KNOWN = ['mode', 'card', 'scroll', 'width', 'zoom', 'fontFamily', 'fontSize', 'fontRole', 'colors']
+      const merged = { ...current }
+      for (const key of KNOWN) {
+        if (patch[key] !== undefined) merged[key] = patch[key]
+      }
+      await mkdir(dirname(path), { recursive: true })
+      await writeFile(path, JSON.stringify(merged, null, 2), 'utf8')
+      return { defaults: merged, path }
+    },
+  }))
+
 }
