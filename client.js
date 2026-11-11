@@ -76,7 +76,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@1280fd57ab (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@ca5179af53 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -915,6 +915,17 @@ body.vz-longpress, body.vz-longpress * {
         report();
       }
 
+      // 表示先: 本文の中(この場)か、右サイドバーへ移すか。
+      var placeBody = section('表示先');
+      var placeRow = row();
+      var toSidebar = button('右側へ移す', function () {
+        parent.postMessage({
+          dshVizToSidebar: true,
+          path: window.__dshVizPath || '',
+          session: window.__dshVizSession || '',
+        }, "*");
+      });
+      placeRow.appendChild(toSidebar);
       // 幅: 内容の表示幅(列に対する %)。既定は 100%。
       var widthBody = section('幅');
       var widthRow = row();
@@ -3335,6 +3346,176 @@ body { padding: 14px 16px 16px; }`
     }
 
     /**
+     * 右サイドバーで断片のタブを開く。
+     *
+     * タブのアドレスは visualize://<session>/<title>。右サイドバーの
+     * コントローラ(ctx.sidebarRight)がこの住所をこのタブ種別へ割り当てる。
+     * @param session - 断片が属する Session。
+     * @param path - 断片の絶対パス(<title>.html)。
+     */
+    function openRightSidebarTab(session, path) {
+      const title = String(path).replace(/\\/g, '/').split('/').pop()?.replace(/\.html$/i, '') ?? ''
+      if (session === '' || title === '') return
+      const address = 'visualize://' + session + '/' + title
+      const runtime = window.__dshVisualizeSidebar
+      if (typeof runtime === 'function') {
+        runtime(address)
+        return
+      }
+      // まだ束縛されていなければ、次の描画で開く。
+      window.__dshVisualizePendingAddress = address
+    }
+
+    /**
+     * 右サイドバーのタブ種別。断片を親ページで描き、その場で編集できる。
+     * フェンスから「右側へ」を選ぶとこのタブが開き、閉じるとフェンスへ戻る。
+     */
+    const VISUALIZE_SIDEBAR_KIND = 'dsh-visualize-fragment'
+    const VISUALIZE_SIDEBAR_ID = 'dsh-visualize/sidebar'
+
+    /** 右サイドバーの本文: 断片のプレビューと、ソースの編集ペイン。 */
+    function VisualizeSidebarBody(props) {
+      const { useTabInfo } = props
+      const info = useTabInfo()
+      const address = info.tab.navigation.address
+      // アドレスは visualize://<session>/<title>。
+      const parts = String(address).replace(/^visualize:\/\//, '').split('/')
+      const session = parts[0] ?? ''
+      const title = parts[1] ?? ''
+      const [source, setSource] = React.useState(undefined)
+      const [draft, setDraft] = React.useState('')
+      const [editing, setEditing] = React.useState(false)
+      const [busy, setBusy] = React.useState(false)
+      const [note, setNote] = React.useState('')
+      const frameRef = React.useRef(null)
+      const srcDoc = React.useMemo(() => buildSidebarDoc(source), [source])
+
+      React.useEffect(() => {
+        let live = true
+        const url = new URL('api/visualize/file', document.baseURI)
+        url.searchParams.set('session', session)
+        url.searchParams.set('title', title)
+        fetch(url.toString())
+          .then(response => (response.ok ? response.text() : Promise.reject(new Error('HTTP ' + response.status))))
+          .then(text => { if (live) { setSource(text); setDraft(text) } })
+          .catch(error => { if (live) { setSource(null); setNote(String(error.message ?? error)) } })
+        return () => { live = false }
+      }, [session, title])
+
+      /** 保存して再描画する。 */
+      const save = React.useCallback(() => {
+        setBusy(true)
+        const url = new URL('api/visualize/file', document.baseURI)
+        url.searchParams.set('session', session)
+        url.searchParams.set('title', title)
+        fetch(url.toString(), { method: 'PUT', body: draft })
+          .then(response => {
+            if (!response.ok) throw new Error('HTTP ' + response.status)
+            setSource(draft)
+            setEditing(false)
+            setNote('保存しました')
+          })
+          .catch(error => setNote('保存できません: ' + String(error.message ?? error)))
+          .finally(() => setBusy(false))
+      }, [draft, session, title])
+
+      const toolbar = h('div', {
+        key: 'bar',
+        style: {
+          display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap',
+          padding: '8px 12px', borderBottom: '1px solid var(--dsw-alias-border-l1)',
+          fontSize: '12px', color: 'var(--dsw-alias-label-primary-dimmed)',
+        },
+      }, [
+        h('span', { key: 'name', style: { flex: '1 1 auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, title),
+        h('button', {
+          key: 'edit',
+          type: 'button',
+          onClick: () => setEditing(value => !value),
+          style: sidebarButtonStyle(editing),
+        }, editing ? 'プレビュー' : '編集'),
+        editing ? h('button', {
+          key: 'save',
+          type: 'button',
+          disabled: busy,
+          onClick: save,
+          style: sidebarButtonStyle(true),
+        }, busy ? '保存中…' : '保存') : null,
+        h('button', {
+          key: 'close',
+          type: 'button',
+          onClick: () => info.tab.actions.close(),
+          style: sidebarButtonStyle(false),
+        }, '閉じる'),
+        note === '' ? null : h('span', { key: 'note', style: { flex: '0 0 auto', opacity: .8 } }, note),
+      ])
+
+      if (editing) {
+        return h('div', {
+          style: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 },
+        }, [
+          toolbar,
+          h('textarea', {
+            key: 'editor',
+            value: draft,
+            spellCheck: false,
+            onChange: event => setDraft(event.target.value),
+            onKeyDown: event => {
+              // Ctrl/Cmd+S で保存。エディタ内の改行はそのまま。
+              if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+                event.preventDefault()
+                save()
+              }
+            },
+            style: {
+              flex: '1 1 auto', minHeight: 0, width: '100%', boxSizing: 'border-box',
+              padding: '10px 12px', border: 0, resize: 'none', outline: 'none',
+              background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)',
+              fontFamily: 'ui-monospace, monospace', fontSize: '12px', lineHeight: 1.5,
+            },
+          }),
+        ])
+      }
+
+      return h('div', {
+        style: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 },
+      }, [
+        toolbar,
+        source === null
+          ? h('div', { key: 'missing', style: { padding: '12px' } }, '読み込めませんでした: ' + note)
+          : h('iframe', {
+            key: 'frame',
+            ref: frameRef,
+            title,
+            srcDoc,
+            sandbox: 'allow-scripts',
+            style: { flex: '1 1 auto', minHeight: 0, width: '100%', border: 0, background: 'transparent' },
+          }),
+      ])
+    }
+
+    /** サイドバーのボタン。選択中は強調。 */
+    function sidebarButtonStyle(active) {
+      return {
+        flex: '0 0 auto', minHeight: '28px', padding: '2px 9px', borderRadius: '6px',
+        border: '1px solid var(--dsw-alias-border-l1)',
+        background: active ? 'var(--dsw-alias-interactive-bg-hover-accent)' : 'transparent',
+        color: 'inherit', font: 'inherit', cursor: 'pointer',
+      }
+    }
+
+    /** サイドバー用の文書。フレームと同じテーマとランタイムを渡す。 */
+    function buildSidebarDoc(fragment) {
+      if (typeof fragment !== 'string') return '<!doctype html><body></body>'
+      return '<!doctype html><html><head><meta charset="utf-8">'
+        + '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        + '<style>' + themeCss() + '</style><style>' + FRAME_CSS + '</style></head><body>'
+        + '<script>window.__dshVizScroll="none"</script>'
+        + '<script>' + FRAME_SCRIPT + '</script>'
+        + fragment + '</body></html>'
+    }
+
+    /**
      * One visualization: a disclosure header over a sandboxed frame.
      * @param props - the Tool view props supplied by the Tool layer.
      */
@@ -3348,6 +3529,7 @@ body { padding: 14px 16px 16px; }`
       const [open, setOpen] = React.useState(true)
       const [hover, setHover] = React.useState(false)
       const [height, setHeight] = React.useState(undefined)
+      const [inSidebar, setInSidebar] = React.useState(false)
       const nonce = React.useMemo(() => Math.random().toString(36).slice(2), [])
       const frameRef = React.useRef(null)
       // フレームの外に置くメニュー(ハンバーガー・haptic)と、その載せ先。
@@ -3393,6 +3575,13 @@ body { padding: 14px 16px 16px; }`
           if (frameRef.current !== null && event.source !== frameRef.current.contentWindow) return
           if (typeof data.height === 'number' && data.height > 0) {
             setHeight(Math.min(1200, Math.ceil(data.height)))
+          }
+          // 右サイドバーへ移す: タブを開き、このフェンスは畳む。
+          if (data.dshVizToSidebar === true) {
+            openRightSidebarTab(String(data.session ?? ''), String(data.path ?? ''))
+            setOpen(false)
+            setInSidebar(true)
+            return
           }
           // フレームの長押し → 親メニューを開く(ハプティクスも鳴らす)。
           if (data.dshVizHold === true) {
@@ -3468,6 +3657,21 @@ body { padding: 14px 16px 16px; }`
           + html + heightReporter(nonce) + `</body></html>`
 
       // A full-width button, so the whole header is a hit target on a phone.
+      // 右サイドバーへ移した後は、ヘッダに戻す導線を出す。
+      const back = inSidebar
+        ? h('button', {
+          key: 'back',
+          type: 'button',
+          onClick: () => { setInSidebar(false); setOpen(true) },
+          style: {
+            width: '100%', padding: '7px 12px', textAlign: 'left',
+            border: 0, borderTop: '1px solid var(--dsw-alias-border-l1)',
+            background: 'transparent', color: 'var(--dsw-alias-label-primary-dimmed)',
+            fontSize: '11px', cursor: 'pointer',
+          },
+        }, '右サイドバーで表示中(ここに戻す)')
+        : null
+
       const header = h('button', {
         key: 'head',
         type: 'button',
@@ -3580,7 +3784,7 @@ body { padding: 14px 16px 16px; }`
           background: 'var(--dsw-alias-bg-layer-1)',
           color: 'var(--dsw-alias-label-primary)',
         },
-      }, [header, open ? body : null])
+      }, [header, inSidebar ? back : null, open && !inSidebar ? body : null])
     }
 
     /**
@@ -3710,10 +3914,34 @@ body { padding: 14px 16px 16px; }`
       inject: ['slots'],
       apply(ctx) {
         relayState(ctx)
+        // 右サイドバーへ移す導線。このプロファイルに右サイドバーが無いことも
+        // あるので、任意依存として後から束縛する(ctx.inject は不足中は待つ)。
+        ctx.inject(['sidebarRight'], scope => {
+          window.__dshVisualizeSidebar = address => {
+            scope.sidebarRight.openResource(address, { destination: 'sidebar' })
+          }
+          if (typeof window.__dshVisualizePendingAddress === 'string') {
+            window.__dshVisualizeSidebar(window.__dshVisualizePendingAddress)
+            window.__dshVisualizePendingAddress = undefined
+          }
+          return () => { window.__dshVisualizeSidebar = undefined }
+        })
         ctx.slots.inject('tool.call.toolview', () => ctx.slots.register({
           name: 'tool.call.toolview',
           key: 'visualize',
         }, VisualizeView))
+        // 右サイドバーのタブ: 断片の閲覧と編集。フェンスの「右側へ」が開く。
+        ctx.inject(['sidebarRightTabs'], scope => {
+          scope.effect(() => scope.sidebarRightTabs.register({
+            id: VISUALIZE_SIDEBAR_ID,
+            kind: VISUALIZE_SIDEBAR_KIND,
+            title: () => 'ビジュアル',
+            patterns: ['visualize://**'],
+          }), 'dsh-visualize: sidebar tab type')
+          scope.slots.inject('sidebar.right.pane.tab', () => scope.slots.register(
+            { name: 'sidebar.right.pane.tab', key: VISUALIZE_SIDEBAR_ID }, VisualizeSidebarBody,
+          ))
+        })
       },
     }
   },
