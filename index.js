@@ -147,6 +147,39 @@ export function apply(ctx) {
     },
   })
 
+  // 右サイドバーの編集ペインが断片を読み書きするためのルート。
+  // ストア配下の <session>/<title>.html だけを対象にする。
+  ctx.connection.fetch.register({
+    path: '/api/visualize/file',
+    methods: ['GET', 'PUT'],
+    requestBody: 'buffered',
+    fetch: async (request) => {
+      const root = join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), DEFAULT_DIR)
+      const url = new URL(request.url)
+      const session = url.searchParams.get('session') ?? ''
+      const title = url.searchParams.get('title') ?? ''
+      const sessionOk = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(session)
+      const titleOk = /^[a-z0-9][a-z0-9-]{0,63}$/.test(title)
+      if (!sessionOk || !titleOk) return new Response('unknown visualization', { status: 400 })
+      const target = join(root, session, `${title}.html`)
+      if (request.method === 'GET') {
+        try {
+          return new Response(await readFile(target, 'utf8'), {
+            status: 200,
+            headers: { 'content-type': 'text/html; charset=utf-8' },
+          })
+        } catch {
+          return new Response('missing visualization', { status: 404 })
+        }
+      }
+      const body = await request.text()
+      if (body.length > 4_000_000) return new Response('too large', { status: 413 })
+      await mkdir(dirname(target), { recursive: true })
+      await writeFile(target, body, 'utf8')
+      return new Response('ok', { status: 200 })
+    },
+  })
+
   ctx.tools.register(defineTool({
     name: 'visualize_state',
     description: 'Read the interaction state a visualization reported. '

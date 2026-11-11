@@ -76,7 +76,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@ca5179af53 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@cb57937485 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -3356,7 +3356,8 @@ body { padding: 14px 16px 16px; }`
     function openRightSidebarTab(session, path) {
       const title = String(path).replace(/\\/g, '/').split('/').pop()?.replace(/\.html$/i, '') ?? ''
       if (session === '' || title === '') return
-      const address = 'visualize://' + session + '/' + title
+      // openResource は dsh-resource:// スキームしか受理しない(実測)。
+      const address = 'dsh-resource://visualize/' + session + '/' + title
       const runtime = window.__dshVisualizeSidebar
       if (typeof runtime === 'function') {
         runtime(address)
@@ -3379,7 +3380,7 @@ body { padding: 14px 16px 16px; }`
       const info = useTabInfo()
       const address = info.tab.navigation.address
       // アドレスは visualize://<session>/<title>。
-      const parts = String(address).replace(/^visualize:\/\//, '').split('/')
+      const parts = String(address).replace(/^dsh-resource:\/\/visualize\//, '').split('/')
       const session = parts[0] ?? ''
       const title = parts[1] ?? ''
       const [source, setSource] = React.useState(undefined)
@@ -3936,7 +3937,7 @@ body { padding: 14px 16px 16px; }`
             id: VISUALIZE_SIDEBAR_ID,
             kind: VISUALIZE_SIDEBAR_KIND,
             title: () => 'ビジュアル',
-            patterns: ['visualize://**'],
+            patterns: ['dsh-resource://visualize/**'],
           }), 'dsh-visualize: sidebar tab type')
           scope.slots.inject('sidebar.right.pane.tab', () => scope.slots.register(
             { name: 'sidebar.right.pane.tab', key: VISUALIZE_SIDEBAR_ID }, VisualizeSidebarBody,
