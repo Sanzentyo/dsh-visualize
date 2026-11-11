@@ -3674,6 +3674,7 @@ body { padding: 14px 16px 16px; }`
       const wide = payload.mode === 'wide'
       const card = payload.card === true
       const scroll = typeof payload.scroll === 'string' ? payload.scroll : 'none'
+      const menuPosition = typeof payload.position === 'string' ? payload.position : 'top-right'
       const widthPx = typeof payload.width === 'number' && payload.width > 0 ? payload.width : undefined
       // A missing runtime would leave `viz` undefined and every JS-drawn chart
       // blank while the static HTML still rendered — say so instead of showing
@@ -3690,6 +3691,7 @@ body { padding: 14px 16px 16px; }`
           + `<script>window.__dshVizSession=${JSON.stringify(sessionOf(payload.path) ?? '')}</script>`
           + `<script>window.__dshVizState=${JSON.stringify(restored ?? null)}</script>`
           + `<script>window.__dshVizScroll=${JSON.stringify(scroll)}</script>`
+          + `<script>document.documentElement.setAttribute('data-viz-controls-position', ${JSON.stringify(menuPosition)})</script>`
           + `<script>window.__dshVizMenuHosted=true</script>`
           + `<script>${FRAME_SCRIPT}</script>`
           + html + heightReporter(nonce) + `</body></html>`

@@ -16,6 +16,9 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import { assertHtml, assertMode, assertScroll, assertTitle, DEFAULT_DIR, destination, MAX_BYTES, MODES, SCROLLS } from './lib/validate.js'
 import { buildCsvChart, CHART_TYPES, FUNCS, MAX_CSV_BYTES } from './lib/csv.js'
 
+/** Where the settings menu sits in the frame. */
+const CORNERS = ['top-right', 'top-left', 'bottom-right', 'bottom-left']
+
 /** Stable Loader identity. */
 export const name = 'dsh-visualize'
 
@@ -271,6 +274,16 @@ export function apply(ctx) {
         description: 'The visualization width in px, narrower than the message column; the wrapper centers it. '
           + 'Omit for the full column width.',
       },
+      position: {
+        type: 'string',
+        enum: ['top-right', 'top-left', 'bottom-right', 'bottom-left'],
+        description: 'Where the settings menu sits in the frame. Default top-right.',
+      },
+      position: {
+        type: 'string',
+        enum: ['top-right', 'top-left', 'bottom-right', 'bottom-left'],
+        description: 'Where the settings menu sits in the frame: top-right (default), top-left, bottom-right or bottom-left.',
+      },
       path: {
         type: 'string',
         description: 'Destination file. Defaults to the Session store, keyed by the title.',
@@ -298,6 +311,7 @@ export function apply(ctx) {
           title: { type: 'string', required: true },
           mode: { type: 'string', required: true },
           card: { type: 'boolean', required: true },
+          position: { type: 'string', required: true },
           scroll: { type: 'string', required: true },
           width: { type: 'integer' },
           bytes: { type: 'integer', required: true },
@@ -313,6 +327,7 @@ export function apply(ctx) {
       const card = args.card === true
       const scroll = assertScroll(args.scroll)
       const width = typeof args.width === 'number' && args.width > 0 ? args.width : undefined
+      const position = CORNERS.includes(args.position) ? args.position : 'top-right'
       // One store per Session, so a thread's visualizations stay together and no
       // workspace accumulates its own artifact directory. `api/file` needs the
       // absolute path this returns.
@@ -339,6 +354,7 @@ export function apply(ctx) {
         mode,
         card,
         scroll,
+        position,
         ...(width === undefined ? {} : { width }),
         bytes: Buffer.byteLength(html, 'utf8'),
         assets,
@@ -417,6 +433,7 @@ export function apply(ctx) {
           title: { type: 'string', required: true },
           mode: { type: 'string', required: true },
           card: { type: 'boolean', required: true },
+          position: { type: 'string', required: true },
           scroll: { type: 'string', required: true },
           bytes: { type: 'integer', required: true },
           rows: { type: 'integer', required: true, description: 'Aggregated group count.' },
@@ -441,6 +458,7 @@ export function apply(ctx) {
       const title = assertTitle(args.title)
       const mode = assertMode(args.mode)
       const card = args.card === true
+      const position = CORNERS.includes(args.position) ? args.position : 'top-right'
       let csvStat
       try {
         csvStat = await stat(args.csv_path)
@@ -471,6 +489,7 @@ export function apply(ctx) {
         title,
         mode,
         card,
+        position,
         bytes: Buffer.byteLength(html, 'utf8'),
         rows: data.length,
         groups: data,
