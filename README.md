@@ -41,6 +41,81 @@ The HTML **never** travels through the tool result. A visualization is tens of k
 result is replayed in every later request, so the tool returns `{ path, title, mode, bytes }` and the
 client reads the bytes from `/api/file?path=…`.
 
+## Settings menu
+
+The hamburger lives **outside the sandboxed frame**, in the card, because a sandboxed iframe
+cannot produce a trusted activation and the iOS switch that makes Safari vibrate never fires there.
+Hovering the card reveals it on desktop; a 500ms hold reveals it on touch. The sections are plain
+headers (no accordions) and the panel is 400px wide:
+
+| Section | Contents |
+|---|---|
+| 表示 | chart / table |
+| コピー / ダウンロード | format dropdown, COPY⇄DL switch, run |
+| 拡大率 | 50–200%, repaints every chart |
+| 文字 | target (title / axis / tick / all), font, size |
+| 表示先 | move to the right Sidebar |
+| 幅 | content width 40–100% |
+| 位置 | menu corner (four options) |
+| グラフ | only with charts: target chart, legend, series colour |
+| 色 | 対象なし by default — picking a target reveals its colour input |
+| リセット | back to defaults |
+| スクロール | none / x / y / both |
+
+Colour and text are **per element**, not one blanket switch. The targets are title / axis / tick /
+legend / body / dim / surface / accent / border; the blanket text entry is gone because per-element
+targets cover it. The menu chrome uses its own `--vzm-*` tokens, so a reader’s content overrides can
+never make the menu unreadable.
+
+### Per-element tokens
+
+`viz.chart` reads these from `documentElement`, so an override must go on the root — setting them on
+`.vz-content` is invisible to the chart (measured).
+
+| Element | Colour | Size | Font |
+|---|---|---|---|
+| title | `--vz-title` | `--vz-font-title` | `--vz-font-title-family` |
+| axis label | `--vz-axis` | `--vz-font-label` | `--vz-font-label-family` |
+| tick | `--vz-tick` | `--vz-font-tick` | `--vz-font-tick-family` |
+
+### Saved settings
+
+Zoom, chart/table, colours, fonts, scroll, width and menu position are reported through
+`viz.state({…})` to `/api/visualize/state` and restored on the next render.
+
+## Editing by hand
+
+Anything carrying `data-editable` opens an editor on a mouse double-click or a **double-tap**
+(two taps within 300ms; `dblclick` never fires on touch — measured). Entry selects the whole value,
+scrolls the element to the centre of the visual viewport and re-centres once after the software
+keyboard resizes it. Enter commits, Escape reverts, blur commits, an empty edit restores the original.
+Chart titles, axis labels and legend labels carry it already.
+
+## Defaults across Sessions — `visualize_defaults`
+
+`visualize_defaults` reads and writes `<home>/visualize/_defaults.json`, so a default can be changed
+once and every later call inherits it. Known keys: `mode`, `card`, `scroll`, `width`, `zoom`,
+`fontFamily`, `fontSize`, `fontRole`, `colors`; unknown keys are ignored so a typo never lands in the
+defaults.
+
+```
+visualize_defaults(action: "get")
+visualize_defaults(action: "set", values: { mode: "wide", card: true, zoom: 110 })
+visualize_defaults(action: "reset")
+```
+
+## Right Sidebar
+
+表示先 → 右側へ移す opens the fragment as a tab in the right column and folds the fence. Its address
+is `dsh-resource://visualize/<sessionId>/<title>`.
+
+- `ctx.sidebarRight.openResource` accepts **only** `dsh-resource://`; any other scheme throws (measured).
+- `ctx.sidebarRight` and `ctx.layout` are bound through `ctx.inject`, not top-level `inject`: a profile
+  without the right Sidebar still boots the plugin that way (measured).
+- The tab toolbar offers 編集 / 領域を畳む / 閉じる. 編集 swaps in a source textarea that saves over
+  `/api/visualize/file` (GET/PUT, store paths only; Ctrl/Cmd+S works too). 領域を畳む collapses the
+  whole column (675px → 0 in the live run). Closing the tab dispatches `dshVizSidebarClosed` and the
+  fence returns to the body.
 ## Tool
 
 ```

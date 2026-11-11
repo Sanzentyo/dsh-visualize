@@ -499,3 +499,85 @@ document.head.appendChild(s);
 - 色が黒一色 → `fill: var(--viz-series-1)` を指定しているか。`currentColor` は本文色になる
 - はみ出す → 固定幅をやめる。`max-width: 100%` と `overflow: auto` を入れる
 - 高さが足りない → 通常は自動。`position: absolute` を使うと計測できないので避ける
+
+## 設定メニュー(フレームの右上)
+
+メニューは**フレームの外**(ツールカード側)にあり、ハンバーガー・パネル・
+haptic 用の switch を親ページが持つ。サンドボックス iframe では trusted な
+操作が作れず、iOS の switch ハプティクスが鳴らないため。デスクトップは枠に
+マウスが入るとボタンが出る。タッチは長押し(500ms)。
+
+区画は開閉なしの見出しで、上から順に:
+
+| 区画 | 中身 |
+|---|---|
+| 表示 | グラフ / 表 |
+| コピー / ダウンロード | 形式プルダウン + COPY⇄DL スイッチ + 実行 |
+| 拡大率 | 50–200% のスライダー(変更後に全チャートを再描画) |
+| 文字 | 対象(タイトル/軸ラベル/目盛り/すべて)+ フォント + サイズ |
+| 表示先 | 右サイドバーへ移す |
+| 幅 | 内容の表示幅 40–100% |
+| 位置 | メニューの四隅(右上/左上/右下/左下) |
+| グラフ | グラフがあるときだけ。対象グラフ・凡例・系列色 |
+| 色 | 対象なし(既定)→ 選ぶとその要素の色入力 |
+| リセット | デフォルトに戻す |
+| スクロール | none / x / y / both |
+
+**色は要素別。** 対象を選ぶまで色入力は出ない。対象は
+タイトル文字 / 軸ラベル / 目盛り / 凡例 / 本文 / 補助文字 / 面 / 強調 / 枠線。
+一括の「text」は無い(要素別で足りるため撤去した)。
+
+**トークン**(viz.chart は documentElement の computed style から読む):
+
+| 用途 | トークン |
+|---|---|
+| タイトル文字色 / サイズ / フォント | --vz-title / --vz-font-title / --vz-font-title-family |
+| 軸ラベル | --vz-axis / --vz-font-label / --vz-font-label-family |
+| 目盛り | --vz-tick / --vz-font-tick / --vz-font-tick-family |
+| 本文・補助・面・強調・枠線 | --vz-text / --vz-dim / --vz-surface / --vz-accent / --vz-border |
+| メニュー自身(内容の上書きから独立) | --vzm-* |
+
+**上書き先を間違えない。** .vz-content に --vz-* を置くと viz.chart から
+見えず、色が変わらない(実測)。ルートへ置く。
+
+**設定は保存され、次回の描画で復元される。** 拡大率・表/グラフ・色・フォント・
+スクロール・幅・位置。保存は viz.state({...}) 経由で
+/api/visualize/state に置かれ、フレーム起動時に読み戻す。
+
+## 要素を直接書き換える(ダブルクリック / ダブルタップ)
+
+data-editable を付けた要素は、マウスのダブルクリック、タッチの
+**ダブルタップ**(300ms 以内に 2 回)で編集できる。編集開始時に全選択し、
+画面中央へ寄せる(ソフトキーボード表示後にもう一度)。Enter で確定、
+Esc で取り消し、フォーカスアウトで確定、空なら元へ戻す。
+チャートのタイトル・軸ラベル・凡例ラベルには最初から付いている。
+
+## 既定値を書き換える — visualize_defaults
+
+セッションをまたぐ既定値は <home>/visualize/_defaults.json。
+
+```
+visualize_defaults(action: "get")
+visualize_defaults(action: "set", values: { mode: "wide", card: true, zoom: 110, fontSize: 13 })
+visualize_defaults(action: "reset")
+```
+
+既知キーは mode / card / scroll / width / zoom / fontFamily / fontSize /
+fontRole / colors。知らないキーは無視する(タイポを既定値に混ぜない)。
+
+## 右サイドバーへ移す
+
+メニューの「表示先 → 右側へ移す」で、断片は**右カラムのタブ**として開き、
+フェンスは畳まれる。タブの住所は
+dsh-resource://visualize/<sessionId>/<title>。
+
+- ctx.sidebarRight.openResource は **dsh-resource:// しか受理しない**。
+  他のスキームは例外になる(実測)。
+- ctx.sidebarRight / ctx.layout は**任意依存**にする(ctx.inject)。
+  トップレベルの inject に入れると、サービスが無いプロファイルで
+  プラグイン全体が起動しない(実測)。
+- タブのツールバー: 編集 / 領域を畳む / 閉じる。
+- 「編集」はソースの textarea に切り替わり、保存で
+  /api/visualize/file(GET/PUT、ストア配下のみ)へ書き戻す。Ctrl/Cmd+S でも保存。
+- タブを閉じると dshVizSidebarClosed が飛び、フェンスは本文表示へ戻る。
+
