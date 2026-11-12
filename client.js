@@ -208,11 +208,13 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
    変えてもメニューは読めるままにするため、専用トークン --vzm-* を持つ。
    既定値は下の :root でテーマの値から一度だけ写す。 */
 :root {
-  --vzm-surface: var(--vz-surface);
-  --vzm-text: var(--vz-text);
-  --vzm-dim: var(--vz-dim);
-  --vzm-border: var(--vz-border);
-  --vzm-accent: var(--vz-accent);
+  /* テーマの生トークンを直接指す。--vz-* を指すと読者の上書きが
+     メニューにも伝わり、面の色を変えるとメニューまで変わる(実測)。 */
+  --vzm-surface: var(--dsw-alias-bg-layer-1);
+  --vzm-text: var(--dsw-alias-label-primary);
+  --vzm-dim: var(--dsw-alias-label-primary-dimmed);
+  --vzm-border: var(--dsw-alias-border-l1);
+  --vzm-accent: var(--dsw-alias-brand-primary);
 }
 
 /* 常在しない。操作で出す: ホバーのある環境はボタン自身(右上の 30px 程度)の
@@ -221,6 +223,7 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
    効くので、メニューはホストのパレットに追従しつつ誤設定から隔離される。
    パネルはボタンから折り畳みアニメーション(scale + opacity)で展開する。 */
 .vz-menu-btn {
+  z-index: 32;
   position: absolute; z-index: 2147483647;
   width: 30px; height: 30px;
   border-radius: 7px; border: 1px solid var(--vzm-border);
@@ -277,8 +280,8 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 .vz-menu-panel.vz-menu-bottom-right { top: auto; bottom: 4px; right: 4px; transform-origin: bottom right; }
 .vz-menu-panel.vz-menu-bottom-left { top: auto; bottom: 4px; left: 4px; transform-origin: bottom left; }
 /* 内容の器: 先頭にボタンの行ぶん(30px)の余白を確保する。 */
-.vz-menu-content { padding-top: 30px; }
-.vz-menu-content-bottom { padding-top: 0; padding-bottom: 30px; }
+.vz-menu-content { padding-top: 0; }
+.vz-menu-content-bottom { padding-top: 0; padding-bottom: 0; }
 .vz-menu-h {
   padding: 8px 0 4px; margin: 0;
   border-top: 1px solid var(--vzm-border);
@@ -287,6 +290,8 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 .vz-menu-h:first-of-type { border-top: 0; }
 .vz-menu-body { padding: 0 0 6px 0; }
 .vz-menu-panel > .vz-menu-h:first-child, .vz-menu-content > .vz-menu-h:first-child { margin-top: 0; }
+/* 開いているハンバーガーと最初の見出しが重ならないよう、右だけ空ける。 */
+.vz-menu-panel > .vz-menu-h:first-child, .vz-menu-content > .vz-menu-h:first-child { padding-right: 34px; }
 .vz-menu-row { display: flex; align-items: center; gap: 6px; margin: 4px 0; flex-wrap: wrap; }
 .vz-menu-label { flex: 1 1 auto; color: var(--vzm-dim); font-size: .92em; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .vz-menu-check { display: flex; align-items: center; gap: 6px; font-size: .92em; cursor: pointer; }
@@ -924,6 +929,7 @@ body.vz-longpress, body.vz-longpress * {
       var placeRow = row();
       var toSidebar = button('右側へ移す', function () {
         parent.postMessage({
+          dshVisualize: window.__dshVizNonce || undefined,
           dshVizToSidebar: true,
           path: window.__dshVizPath || '',
           session: window.__dshVizSession || '',
@@ -1671,6 +1677,8 @@ body.vz-longpress, body.vz-longpress * {
       else if (command.type === 'width') applyWidth(command.percent);
       else if (command.type === 'position') applyMenuPosition(command.value);
       else if (command.type === 'export') runExport(command);
+      // 設定を変えたコマンドは必ず保存する(次回の描画で復元する)。
+      if (command.type !== 'export') report();
     });
 
     // 親へグラフの一覧を知らせる(対象グラフのプルダウン用)。
@@ -2585,7 +2593,7 @@ body { padding: 14px 16px 16px; }`
      */
     const FRAME_MENU_CSS = `
 .vz-fm-btn {
-  position: absolute; z-index: 30; top: 4px; right: 4px;
+  position: absolute; z-index: 33; top: 4px; right: 4px;
   width: 30px; height: 30px; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: 7px; border: 1px solid var(--dsw-alias-border-l1);
@@ -2593,6 +2601,8 @@ body { padding: 14px 16px 16px; }`
   cursor: pointer; opacity: 0; transition: opacity .16s ease; font: inherit;
 }
 .vz-fm-frame:hover .vz-fm-btn, .vz-fm-btn[data-open="true"], .vz-fm-btn:focus-visible { opacity: 1; }
+/* 開いている間はホバーが外れても隠さない。 */
+.vz-fm-btn[data-open="true"] { opacity: 1 !important; }
 .vz-fm-btn[data-position="top-left"] { left: 4px; right: auto; }
 .vz-fm-btn[data-position="bottom-right"] { top: auto; bottom: 4px; right: 4px; }
 .vz-fm-btn[data-position="bottom-left"] { top: auto; bottom: 4px; left: 4px; right: auto; }
@@ -2602,7 +2612,7 @@ body { padding: 14px 16px 16px; }`
   position: absolute; z-index: 31; top: 4px; right: 4px;
   width: 400px; max-width: calc(100% - 8px); max-height: min(72vh, calc(100% - 8px));
   box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain;
-  padding: 40px 12px 10px; border-radius: 10px;
+  padding: 4px 12px 10px; border-radius: 10px;
   background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary);
   border: 1px solid var(--dsw-alias-border-l1);
   box-shadow: 0 8px 24px rgb(0 0 0 / .22);
@@ -2621,7 +2631,7 @@ body { padding: 14px 16px 16px; }`
   background: transparent; color: var(--dsw-alias-label-primary);
   font: inherit; font-size: .93em; font-weight: 600; text-align: left; cursor: pointer;
 }
-.vz-fm-h:first-of-type { border-top: 0; }
+.vz-fm-h:first-of-type { border-top: 0; padding-right: 34px; }
 .vz-fm-h::after {
   content: ''; margin-left: auto; width: 0; height: 0;
   border-left: 4px solid transparent; border-right: 4px solid transparent;
@@ -3633,17 +3643,19 @@ body { padding: 14px 16px 16px; }`
         if (typeof window === 'undefined') return undefined
         const onMessage = event => {
           const data = event.data
-          if (data === null || typeof data !== 'object' || data.dshVisualize !== nonce) return
+          if (data === null || typeof data !== 'object') return
+          // 出所はこのフレームに限る(他ウィンドウのメッセージは無視する)。
           if (frameRef.current !== null && event.source !== frameRef.current.contentWindow) return
-          if (typeof data.height === 'number' && data.height > 0) {
-            setHeight(Math.min(1200, Math.ceil(data.height)))
-          }
-          // 右サイドバーへ移す: タブを開き、このフェンスは畳む。
+          // 右サイドバーへの移動は nonce を問わない(古いフレームからも届く)。
           if (data.dshVizToSidebar === true) {
             openRightSidebarTab(String(data.session ?? ''), String(data.path ?? ''))
             setOpen(false)
             setInSidebar(true)
             return
+          }
+          if (data.dshVisualize !== nonce) return
+          if (typeof data.height === 'number' && data.height > 0) {
+            setHeight(Math.min(1200, Math.ceil(data.height)))
           }
           // フレームの長押し → 親メニューを開く(ハプティクスも鳴らす)。
           if (data.dshVizHold === true) {
@@ -3717,6 +3729,7 @@ body { padding: 14px 16px 16px; }`
           + `<script>window.__dshVizScroll=${JSON.stringify(scroll)}</script>`
           + `<script>document.documentElement.setAttribute('data-viz-controls-position', ${JSON.stringify(menuPosition)})</script>`
           + `<script>window.__dshVizMenuHosted=true</script>`
+          + `<script>window.__dshVizNonce=${JSON.stringify(nonce)}</script>`
           + `<script>${FRAME_SCRIPT}</script>`
           + html + heightReporter(nonce) + `</body></html>`
 
