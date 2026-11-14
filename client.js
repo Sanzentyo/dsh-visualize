@@ -76,7 +76,7 @@ window.__ModuleLoader__.load({
      * `packages/client/ui-primitives/src/markdown/visualize-runtime.ts`.
      */
     // <generated:frame-runtime>
-    // Vendored from deepseek-harness@cdbd794c77 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
+    // Vendored from deepseek-harness@2e66105a73 (D:\git\deepseek-harness\packages\client\ui-primitives\src\markdown\visualize-runtime.ts).
     // Regenerate with `node scripts/sync-runtime.mjs` — do not edit by hand.
     const FRAME_CSS = `
 html, body { margin: 0; background: transparent; }
@@ -296,6 +296,22 @@ hr { border: 0; border-top: 1px solid var(--vz-border); margin: 12px 0; }
 .vz-menu-label { flex: 1 1 auto; color: var(--vzm-dim); font-size: .92em; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .vz-menu-check { display: flex; align-items: center; gap: 6px; font-size: .92em; cursor: pointer; }
 .vz-menu-panel .btn { min-height: 36px; padding: 4px 10px; font-size: .9em; }
+/* メニュー内の入力は内容の .form-select/.form-control を再利用しているため、
+   そのままだと --vz-* を継承して読者の色変更でプルダウンまで染まる(実測)。
+   パネル内だけメニュー専用トークンへ差し替える。 */
+.vz-menu-panel select, .vz-menu-panel input, .vz-menu-panel textarea,
+.vz-menu-panel .form-select, .vz-menu-panel .form-control {
+  background: var(--vzm-surface) !important;
+  color: var(--vzm-text) !important;
+  border-color: var(--vzm-border) !important;
+}
+.vz-menu-panel option { background: var(--vzm-surface); color: var(--vzm-text); }
+.vz-menu-panel input[type="range"] { accent-color: var(--vzm-accent); background: transparent !important; }
+.vz-menu-panel input[type="color"] { background: var(--vzm-surface) !important; }
+.vz-menu-panel .btn { background: transparent; color: var(--vzm-text); border-color: var(--vzm-border); }
+.vz-menu-panel .btn:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover-accent); }
+.vz-menu-label, .vz-menu-panel .form-label { color: var(--vzm-dim) !important; }
+.vz-menu-h { color: var(--vzm-text) !important; border-top-color: var(--vzm-border) !important; }
 /* COPY ⇄ DL のスイッチ: ネイティブ checkbox をスイッチ風に描く。 */
 .vz-switch {
   appearance: none; -webkit-appearance: none;
@@ -467,6 +483,22 @@ body.vz-longpress, body.vz-longpress * {
         if (typeof value === 'string' && value !== '') root.style.setProperty(token, value);
       });
     }
+    // グラフ単位の上書きは、チャートが描かれてから当てる。
+    if (saved.charts !== null && typeof saved.charts === 'object') {
+      setTimeout(function () {
+        var list = charts();
+        Object.keys(saved.charts).forEach(function (index) {
+          var entry = list[Number(index)];
+          if (entry === undefined) return;
+          var tokens = saved.charts[index];
+          Object.keys(tokens).forEach(function (token) {
+            var value = tokens[token];
+            if (typeof value === 'string' && value !== '') entry.host.style.setProperty(token, value);
+          });
+          entry.update(entry.config, true);
+        });
+      }, 200);
+    }
   }
 
   /** fit の後に全チャートへ再計測を促す(描画幅のずれを直す)。 */
@@ -615,6 +647,8 @@ body.vz-longpress, body.vz-longpress * {
     var appliedColors = saved.colors !== null && typeof saved.colors === 'object' ? saved.colors : {};
     /** 上書きしたフォント(--vz-font-<role>-family などのトークン名 → 値)。 */
     var appliedFonts = saved.fonts !== null && typeof saved.fonts === 'object' ? saved.fonts : {};
+    /** グラフ単位の上書き(グラフ index → トークン → 値)。 */
+    var appliedCharts = saved.charts !== null && typeof saved.charts === 'object' ? saved.charts : {};
 
     /**
      * 設定の保存。復元できるよう、上書きしたトークンをキーで記録する。
@@ -624,9 +658,11 @@ body.vz-longpress, body.vz-longpress * {
       if (!window.viz || !window.viz.state) return;
       window.viz.state({
         tableMode: tableMode,
-        zoom: Number(root.getAttribute('data-viz-zoom')) || 1,
+        // 保存は百分率(100 = 等倍)。復元側が /100 するので単位を揃える。
+        zoom: Math.round((Number(root.getAttribute('data-viz-zoom')) || 1) * 100),
         colors: appliedColors,
         fonts: appliedFonts,
+        charts: appliedCharts,
         scroll: window.__dshVizScroll || 'none',
         edits: edits,
       });
@@ -1183,12 +1219,13 @@ body.vz-longpress, body.vz-longpress * {
     // タッチの出現は長押しのみ。
     var hideTimer = null;
     var engaged = false;
+    /**
+     * 自動で閉じない。開いたメニューは、ハンバーガーの再タップ・外側クリック・
+     * 明示的な閉じる操作だけで閉じる(4 秒タイマーはハンバーガーごと消えて
+     * 読者が操作を続けられなかった — 実測)。タッチでも同じ。
+     */
     function armHide() {
-      if (hideTimer !== null) clearTimeout(hideTimer);
-      hideTimer = setTimeout(function () {
-        if (engaged) return;
-        closeMenu();
-      }, 4000);
+      if (hideTimer !== null) { clearTimeout(hideTimer); hideTimer = null; }
     }
     function engage() {
       // メニュー内での操作: 自動で閉じるのをやめる。
@@ -1659,6 +1696,30 @@ body.vz-longpress, body.vz-longpress * {
       charts().forEach(function (c) { c.update(c.config, true); });
     }
 
+    /**
+     * 1 枚のグラフにだけ効く上書き。
+     * 対象は index(0 始まり)。value が空なら解除。
+     * tokens は --viz-series-1..6 / --vz-title / --vz-axis / --vz-tick / --vz-font-*。
+     */
+    function applyChartOverride(command) {
+      var list = charts();
+      var entry = list[Number(command.index) || 0];
+      if (entry === undefined) return;
+      if (command.tokens !== null && typeof command.tokens === 'object') {
+        Object.keys(command.tokens).forEach(function (token) {
+          setChartOverride(entry.host, token, command.tokens[token]);
+        });
+      }
+      var index = Number(command.index) || 0;
+      if (typeof command.token === 'string') {
+        setChartOverride(entry.host, command.token, command.value);
+        if (appliedCharts[index] === undefined) appliedCharts[index] = {};
+        if (command.value === '') delete appliedCharts[index][command.token];
+        else appliedCharts[index][command.token] = command.value;
+      }
+      entry.update(entry.config, true);
+    }
+
     /** メニューの位置(四隅)。フレーム内メニューが無い場合は何もしない。 */
     function applyMenuPosition() { /* メニューは親が持つので、フレーム側では何もしない */ }
 
@@ -1676,6 +1737,7 @@ body.vz-longpress, body.vz-longpress * {
       else if (command.type === 'scroll') { window.__dshVizScroll = command.value; fit(); }
       else if (command.type === 'width') applyWidth(command.percent);
       else if (command.type === 'position') applyMenuPosition(command.value);
+      else if (command.type === 'chart') applyChartOverride(command);
       else if (command.type === 'export') runExport(command);
       // 設定を変えたコマンドは必ず保存する(次回の描画で復元する)。
       if (command.type !== 'export') report();
@@ -1701,11 +1763,23 @@ body.vz-longpress, body.vz-longpress * {
     for (var k in attrs) if (attrs[k] !== undefined && attrs[k] !== null) node.setAttribute(k, attrs[k]);
     return node;
   }
-  function cssVar(name, fallback) {
+  function cssVar(name, fallback, scope) {
+    // scope(チャートの host)が上書きを持っていればそれを優先する。
+    // 「特定のグラフだけ色を変える」はこの経路で実現する。
+    if (scope && scope.nodeType === 1) {
+      var own = getComputedStyle(scope).getPropertyValue(name).trim();
+      if (own !== '') return own;
+    }
     var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
     return v || fallback;
   }
-  function color(i) { return cssVar(SERIES[i % SERIES.length], 'currentColor'); }
+  /** この host にだけ効く上書きを置く。 */
+  function setChartOverride(host, token, value) {
+    if (host === null || host === undefined) return;
+    if (value === undefined || value === '') host.style.removeProperty(token);
+    else host.style.setProperty(token, value);
+  }
+  function color(i, host) { return cssVar(SERIES[i % SERIES.length], 'currentColor', host); }
 
   /**
    * 文字のサイズを CSS 変数経由にする。
@@ -1851,7 +1925,7 @@ body.vz-longpress, body.vz-longpress * {
         var p = el('path', {
           d: 'M' + cx + ' ' + cy + ' L' + (cx + rad * Math.cos(ang)) + ' ' + (cy + rad * Math.sin(ang))
             + ' A' + rad + ' ' + rad + ' 0 ' + large + ' 1 ' + (cx + rad * Math.cos(next)) + ' ' + (cy + rad * Math.sin(next)) + ' Z',
-          fill: color(i), stroke: cssVar('--vz-surface', 'transparent'), 'stroke-width': 1,
+          fill: color(i, host), stroke: cssVar('--vz-surface', 'transparent'), 'stroke-width': 1,
           'data-tooltip': String(r[xi]) + ': ' + fmt(+r[ys[0]], config.format),
         });
         svg.appendChild(p);
@@ -2183,7 +2257,7 @@ body.vz-longpress, body.vz-longpress * {
           if (stacked) { y = sy(acc + v); h = Math.abs(sy(acc + v) - sy(acc)); }
           svg.appendChild(el('rect', {
             x: x, y: y, width: Math.max(1, each - 1), height: Math.max(1, h), rx: 3,
-            fill: color(si),
+            fill: color(si, host),
             'data-bar': i + '-' + si,
             'data-tooltip': String(r[xi]) + ': ' + fmt(v, config.format),
           }));
@@ -2197,7 +2271,7 @@ body.vz-longpress, body.vz-longpress * {
           var v = +r[yi];
           if (!isFinite(v)) return;
           svg.appendChild(el('circle', {
-            cx: sx(i), cy: sy(v), r: 3.5, fill: color(si),
+            cx: sx(i), cy: sy(v), r: 3.5, fill: color(si, host),
             'data-pt': i + '-' + si,
             'data-tooltip': String(r[xi]) + ': ' + fmt(v, config.format),
           }));
@@ -2221,17 +2295,17 @@ body.vz-longpress, body.vz-longpress * {
           var base = sy(stacked ? 0 : scale.lo);
           svg.appendChild(el('path', {
             d: d + ' L' + pts[pts.length - 1][0].toFixed(1) + ' ' + base + ' L' + pts[0][0].toFixed(1) + ' ' + base + ' Z',
-            fill: color(si), opacity: 0.18, 'pointer-events': 'none',
+            fill: color(si, host), opacity: 0.18, 'pointer-events': 'none',
           }));
         }
-        svg.appendChild(el('path', { d: d, fill: 'none', stroke: color(si), 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', 'data-line': String(si) }));
+        svg.appendChild(el('path', { d: d, fill: 'none', stroke: color(si, host), 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', 'data-line': String(si) }));
         if (type !== 'sparkline') {
           rows.forEach(function (r, i) {
             var v = +r[yi];
             if (!isFinite(v)) return;
             var y = stacked ? sy(acc2[i] + v) : sy(v);
             svg.appendChild(el('circle', {
-              cx: sx(i), cy: y, r: 2.5, fill: color(si),
+              cx: sx(i), cy: y, r: 2.5, fill: color(si, host),
               'data-pt': i + '-' + si,
               'data-tooltip': String(r[xi]) + ': ' + fmt(v, config.format),
             }));
@@ -2281,7 +2355,7 @@ body.vz-longpress, body.vz-longpress * {
           });
         }
         var swatch = document.createElement('span');
-        swatch.style.cssText = 'display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;background:' + color(si);
+        swatch.style.cssText = 'display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;background:' + color(si, host);
         item.appendChild(swatch);
         // 凡例ラベルはダブルクリック/ダブルタップで編集できる。
         var nameSpan = document.createElement('span');
